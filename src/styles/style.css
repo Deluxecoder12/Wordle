@@ -1,0 +1,186 @@
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html{
+    font-family: monospace;
+    background-color: black;
+    color: white;
+}
+
+header{
+    padding: 1em;
+    border-bottom: 0.1em solid red;
+}
+
+ul{
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    list-style: none;
+    font-size: 1rem;
+}
+
+li{
+    padding-right: 2em;
+    align-content: center;
+}
+
+.Heading{
+    font-size: 2em;
+    justify-self: center;
+}
+
+.Left{
+    order: -1;
+}
+
+a{
+    text-decoration: none;
+    color: white;
+}
+
+li a:hover, img:hover{
+    opacity: 0.7;
+}
+
+img{
+    max-width: 2.5em;
+    max-height: auto;
+}
+
+section{
+    /* pointer-events: none; */
+    padding: 3rem;
+    display: flex;
+    place-content: center;
+    place-items: center;
+    flex-direction: column;
+}
+
+.word-guess{
+    padding: 3px;
+    display: flex;
+    flex-flow: column;
+    gap: 10px;
+    justify-content: space-between;
+    max-width: fit-content;
+}
+
+.guess-row{
+    width: 100%;
+}
+
+/* Default style for input boxes */
+.guess-box {
+    /* pointer-events: auto; */
+    max-width: 2.2ch;
+    font-size: 2.5em;
+    background-color: black;
+    color: whitesmoke;
+    text-align: center;
+    border: 2px solid #444; /* Original border color */
+    transition: #444 0.3s ease; /*Smooth transition for border color */
+}
+
+
+.glow {
+    border-color: #fff;
+    box-shadow: 0 0 5px #f00;
+}
+
+/* To hide the text cursor (caret) */
+.no-caret {
+    caret-color: transparent;
+    text-align: center;
+}
+
+/* CSS classes for background colors */
+.green {
+    background-color: green;
+}
+
+.yellow {
+    background-color: rgba(255, 255, 0, 0.871);
+}
+
+.grey {
+    background-color: grey;
+}
+
+.virtual-keyboard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.keyboard-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 5px;
+}
+
+.key {
+    background-color: #444;
+    border: 1px solid #333;
+    color: #fff;
+    font-size: 1.5em;
+    font-family: monospace;
+    padding: 10px;
+    margin: 2px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.key:hover {
+    background-color: #555;
+}
+
+#backspace {
+    width: 60px;
+}
+
+#enter {
+    width: 70px;
+}
+
+@media (max-width: 768px) {
+    .key {
+        font-size: 1.1em;
+        padding: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .key {
+        font-size: 1em;
+        padding: 6px;
+    }
+}
+
+/* Adjust styles for screens smaller than 768px */
+@media (max-width: 768px) {
+    .guess-cell {
+        padding: 1.2em;
+        font-size: 2em;
+    }
+
+    .Heading {
+        font-size: 2em;
+    }
+}
+
+/* Adjust styles for screens smaller than 480px */
+@media (max-width: 480px) {
+    .guess-box {
+        padding: 0.25rem;
+        font-size: 1.5em;
+    }
+
+    .Heading {
+        font-size: 1.5em;
+    }
+}
