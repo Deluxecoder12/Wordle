@@ -1,2 +1,4 @@
 BUGS_LIST.txt
 api.js
+.env
+server.js
