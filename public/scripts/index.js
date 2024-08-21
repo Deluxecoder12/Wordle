@@ -1,12 +1,5 @@
 document.addEventListener('DOMContentLoaded', async function() {
     
-    //Function to generate a random 5-letter word
-    // function getRandomWord() {
-        //     const words = ['APPLE', 'BANAN', 'GRAPE', 'LEMON', 'MANGO']; // Example words
-        //     const randomIndex = Math.floor(Math.random() * words.length);
-        //     return words[randomIndex];
-        // }
-        
     //Function to get a random 5-letter word
     async function getRandomWord() {
         try {
@@ -18,7 +11,35 @@ document.addEventListener('DOMContentLoaded', async function() {
             return data.word.toUpperCase();
         } catch (error) {
             console.error('Error fetching word:', error);
-            return 'CRANE'; // Fallback word
+            const words = [
+                'APPLE', 'CRANE', 'GRAPE', 'LEMON', 'MANGO',
+                'ABODE', 'ADORE', 'AGILE', 'ALONE', 'ANGRY',
+                'BAKER', 'BEACH', 'BIRTH', 'BLINK', 'BLUSH',
+                'CARGO', 'CAREF', 'CHALK', 'CHEER', 'CHILL',
+                'DAISY', 'DANDY', 'DEBUT', 'DELAY', 'DELTA',
+                'EARTH', 'EMPTY', 'EVENT', 'EXTRA', 'FAIRY',
+                'GAMER', 'GHOST', 'GREEN', 'GROWL', 'GUILT',
+                'HAPPY', 'HAUNT', 'HEAVY', 'HELLO', 'HELPS',
+                'IGLOO', 'IMAGE', 'INDEX', 'INLET', 'IRONY',
+                'JACKET', 'JOKER', 'JUDGE', 'JUMBO', 'JUNIOR',
+                'KETCH', 'KNACK', 'KNOCK', 'KNOWS', 'KYRIE',
+                'LABEL', 'LADLE', 'LAUGH', 'LEARN', 'LEMON',
+                'MAGIC', 'MAKER', 'MALLET', 'MARCH', 'MATES',
+                'NASTY', 'NIGHT', 'NOISE', 'NORTH', 'NURSE',
+                'OCEAN', 'OFFER', 'ORDER', 'OVERT', 'OWNER',
+                'PANEL', 'PARTY', 'PEACE', 'PHONE', 'PHOTO',
+                'QUIET', 'QUEEN', 'QUEST', 'QUICK', 'QUIZ',
+                'RADIO', 'RAISE', 'RANGE', 'REACH', 'READY',
+                'SAILS', 'SAUNA', 'SCALE', 'SCARE', 'SCOPE',
+                'TABLE', 'TASTE', 'TEACH', 'TEETH', 'TEMPO',
+                'UNCLE', 'UNDER', 'UNITE', 'UNZIP', 'UPHILL',
+                'VAGUE', 'VALET', 'VALUE', 'VAPOR', 'VEGAN',
+                'WAGER', 'WAIST', 'WALKER', 'WATCH', 'WATER',
+                'XEROX', 'XYLON', 'YEARN', 'YELLOW', 'YOUNG',
+                'ZESTY', 'ZIGZAG', 'ZIPPER', 'ZOMBIE', 'ZONE'
+              ];
+            const randomIndex = Math.floor(Math.random() * words.length);
+            return words[randomIndex]; // Fallback word
         }
     }
         
@@ -26,9 +47,36 @@ document.addEventListener('DOMContentLoaded', async function() {
     let targetWord = await getRandomWord();
     let attempts = 0;
     const maxAttempts = 6;
+
+    async function isValidWord(word) {
+        const response = await fetch(`/api/validate-word?word=${word}`, {
+            method: 'GET',
+        });
+    
+        if (response.ok) {
+            const data = await response.json();
+            return data.isValid;
+        } else {
+            throw new Error('Error validating word');
+        }
+    }
     
     // Function to check user guesses
-    function checkGuess(guess, targetWord) {
+    async function checkGuess(guess, targetWord) {
+        try {
+            // Check if the user's guess is valid using the API
+            const isValid = await isValidWord(guess);
+             
+            // If the API says the word is invalid, check if it matches the fetched target word
+            if (!isValid && guess !== targetWord) {
+                alert('Invalid word!');
+                return;
+            }
+        } catch (error) { 
+            alert('Error validating word. Please try again.');
+            return;
+        }
+
         const result = Array(5).fill('grey'); // Default background color
         const targetLetterCount = {}; // Track letter frequencies in the target word
 
@@ -111,7 +159,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // Function to handle Enter key press
-    function handleEnter(event) {
+    async function handleEnter(event) {
         if (event.key === 'Enter') {
             const currentInput = event.target;
             const rowId = parseInt(currentInput.id.split('-')[1]); // Get the row number from the id
@@ -121,7 +169,11 @@ document.addEventListener('DOMContentLoaded', async function() {
                 const guess = Array.from({ length: 5 }, (_, i) => document.getElementById(`box-${rowId}-${i + 1}`).value).join('').toUpperCase();
                 
                 // Check the guess against the target word
-                const result = checkGuess(guess, targetWord);
+                const result = await checkGuess(guess, targetWord);
+
+                if (!result) {
+                    return; // If checkGuess returned undefined (i.e., invalid word), stop further execution
+                }
 
                 // Update the guess boxes with background colors
                 for (let i = 0; i < 5; i++) {
@@ -142,7 +194,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     setTimeout(() => {
                         alert(`Congratulations! You've guessed the word: ${targetWord}`);
                         setTimeout(() => window.location.reload(), 100); // Reload the page after alert
-                    }, 100); // Adjust the delay as needed
+                    }, 100);
                     return;
                 }
 
@@ -274,8 +326,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
         }
     }
-    
-    
     
     function handleVirtualKeyClick(event) {
         console.log('Virtual key clicked:', event.target.textContent);
