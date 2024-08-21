@@ -1,5 +1,13 @@
 document.addEventListener('DOMContentLoaded', async function() {
-    
+    function getRandomColor() {
+        const letters = '0123456789ABCDEF';
+        let color = '#';
+        for (let i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
+
     //Function to get a random 5-letter word
     async function getRandomWord() {
         try {
@@ -158,6 +166,30 @@ document.addEventListener('DOMContentLoaded', async function() {
         return true;
     }
 
+    function createFirework(container) {
+        const fireworkContainer = document.createElement('div');
+        fireworkContainer.classList.add('firework-container');
+        container.appendChild(fireworkContainer);
+    
+        for (let i = 0; i < 40; i++) {
+            const firework = document.createElement('div');
+            firework.classList.add('firework');
+    
+            // Position each firework randomly within the container
+            firework.style.top = `${Math.random() * 100}%`;
+            firework.style.left = `${Math.random() * 100}%`;
+
+            firework.style.background = getRandomColor();
+    
+            fireworkContainer.appendChild(firework);
+        }
+    
+        // Remove the firework effect after animation ends
+        setTimeout(() => {
+            fireworkContainer.remove();
+        }, 2400);
+    }
+    
     // Function to handle Enter key press
     async function handleEnter(event) {
         if (event.key === 'Enter') {
@@ -175,11 +207,15 @@ document.addEventListener('DOMContentLoaded', async function() {
                     return; // If checkGuess returned undefined (i.e., invalid word), stop further execution
                 }
 
-                // Update the guess boxes with background colors
+                // Apply flip animation to each guess box
                 for (let i = 0; i < 5; i++) {
                     const inputBox = document.getElementById(`box-${rowId}-${i + 1}`);
-                    inputBox.classList.remove('green', 'yellow', 'grey'); // Remove any previous colors
-                    inputBox.classList.add(result[i]); // Add new color class
+                    inputBox.classList.add('flip');
+
+                    // Delay applying the color until after the flip starts
+                    setTimeout(() => {
+                        inputBox.classList.add(result[i]); // Add new color class based on the result
+                    }, 150);
                 }
 
                 // Disable editing and hide text cursor
@@ -192,9 +228,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                 // Check if the guess is correct
                 if (guess === targetWord) {
                     setTimeout(() => {
-                        alert(`Congratulations! You've guessed the word: ${targetWord}`);
-                        setTimeout(() => window.location.reload(), 100); // Reload the page after alert
-                    }, 100);
+                        // Trigger the firework effect
+                        const wordContainer = document.querySelector(`#box-${rowId}-1`).closest('section');
+                        createFirework(wordContainer);
+
+                        //alert(`Congratulations! You've guessed the word: ${targetWord}`);
+                        setTimeout(() => window.location.reload(), 3000); // Reload the page after alert
+                    }, 550);
                     return;
                 }
 
@@ -352,6 +392,15 @@ document.addEventListener('DOMContentLoaded', async function() {
     const guessBoxes = document.querySelectorAll('.guess-box');
     guessBoxes.forEach(box => {
         box.addEventListener('input', filterInput); // Filter input to allow only alphabets
+        box.addEventListener('input', (event) => {
+            // To trigger the animation
+            event.target.classList.add('enlarge');
+    
+            // Remove the class after the animation completes so it can be triggered again
+            setTimeout(() => {
+                event.target.classList.remove('enlarge');
+            }, 200); 
+        });
         box.addEventListener('input', moveFocus);
         box.addEventListener('input', toUpperCase); // Convert input to uppercase
         box.addEventListener('keydown', handleEnter);

@@ -110,6 +110,40 @@ section{
     background-color: grey;
 }
 
+.firework-container {
+    position: fixed; /* Position relative to the viewport */
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 9999; /* Ensure it's on top */
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.firework {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: red;
+    animation: fireworkAnimation 3s ease-out forwards;
+}
+
+@keyframes fireworkAnimation {
+    0% {
+        opacity: 1;
+        transform: scale(0);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(2);
+    }
+}
+
 .sr-only {
     position: absolute;
     width: 1px;
@@ -160,18 +194,39 @@ section{
     width: 70px;
 }
 
-@media (max-width: 768px) {
-    .key {
-        font-size: 1.1em;
-        padding: 10px;
+/* For input letters */
+@keyframes enlarge-shrink {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
     }
 }
 
-@media (max-width: 480px) {
-    .key {
-        font-size: 1em;
-        padding: 6px;
+.enlarge {
+    animation: enlarge-shrink 0.2s ease-in-out;
+}
+
+@keyframes flip {
+    0% {
+        transform: rotateY(0deg);
     }
+    50% {
+        transform: rotateY(180deg);
+        background-color: transparent; /* Temporary hide the color during the flip */
+    }
+    100% {
+        transform: rotateY(360deg);
+    }
+}
+
+.flip {
+    animation: flip 0.6s ease-in-out;
+    animation-fill-mode: forwards; /* Keeps the end state after the animation */
 }
 
 /* Adjust styles for screens smaller than 768px */
@@ -184,6 +239,11 @@ section{
     .Heading {
         font-size: 2em;
     }
+
+    .key {
+        font-size: 1.1em;
+        padding: 10px;
+    }
 }
 
 /* Adjust styles for screens smaller than 480px */
@@ -195,5 +255,10 @@ section{
 
     .Heading {
         font-size: 1.5em;
+    }
+
+    .key {
+        font-size: 1em;
+        padding: 6px;
     }
 }
