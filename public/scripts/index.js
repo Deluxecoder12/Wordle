@@ -1,6 +1,14 @@
 document.addEventListener('DOMContentLoaded', async function() {
-    let isAlertActive = false;
+    // Initialize game variables
+    let targetWord = await getRandomWord();
+    let attempts = 0;
+    const maxAttempts = 6;
     
+    // For alerts
+    let isAlertActive = false;
+
+    let lastFocusedInput = null;
+
     // Function to show the custom alert
     function showAlert(message) {
         isAlertActive = true; // Alert is now active
@@ -91,10 +99,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
         
-    // Initialize game variables
-    let targetWord = await getRandomWord();
-    let attempts = 0;
-    const maxAttempts = 6;
+    
 
     async function isValidWord(word) {
         const response = await fetch(`/api/validate-word?word=${word}`, {
@@ -232,13 +237,19 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Function to handle Enter key press
     async function handleEnter(event) {
-        if (event.key === 'Enter') {
+        const isStandardEvent = event && typeof event.preventDefault === 'function';
+        const key = isStandardEvent ? event.key : 'Enter';
+
+        if (key === 'Enter') {
             if (isAlertActive) {
                 // If the alert is active, don't handle guess-cell Enter key events
                 return;
             }
 
-            event.preventDefault(); // Prevent the default behavior of Enter key
+            // Prevent default behavior only if event.preventDefault is available
+            if (isStandardEvent) {
+                event.preventDefault();
+            }
 
             const currentInput = event.target;
             const rowId = parseInt(currentInput.id.split('-')[1]); // Get the row number from the id
@@ -363,11 +374,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     // FIXME: VIRTUAl KEYBOARD DOESN'T WORK!
     function handleKeyPress(key) {
         console.log('handleKeyPress called with key:', key);
-        
-        // Get the currently active input box
-        const activeInput = document.querySelector('.guess-box:not([disabled])');
-        if (!activeInput) {
-            console.log('No active input box found.');
+    
+        // Use the last focused input box instead of document.activeElement
+        const activeInput = lastFocusedInput;
+    
+        if (!activeInput || !activeInput.classList.contains('guess-box')) {
+            console.log('No active input box found or the active element is not a guess-box.');
             return; // If no active input box, return
         }
     
@@ -383,11 +395,16 @@ document.addEventListener('DOMContentLoaded', async function() {
                 activeInput.classList.remove('glow'); // Remove glow effect
             } else {
                 // Move focus to the previous input in the same row
-                const previousInput = document.getElementById(`box-${rowId}-${columnId - 1}`);
-                if (previousInput) {
-                    previousInput.focus(); // Move focus to the previous input
-                    previousInput.value = ''; // Clear previous input value
-                    previousInput.classList.remove('glow'); // Remove glow effect
+                if (columnId > 1) {
+                    const previousInput = document.getElementById(`box-${rowId}-${columnId - 1}`);
+                    if (previousInput) {
+                        previousInput.focus(); // Move focus to the previous input
+                        previousInput.value = ''; // Clear previous input value
+                        previousInput.classList.remove('glow'); // Remove glow effect
+                    }
+                } else {
+                    // If it's the first column, keep the focus here
+                    activeInput.focus();
                 }
             }
         } else if (key === 'Enter') {
@@ -401,17 +418,16 @@ document.addEventListener('DOMContentLoaded', async function() {
                 const nextInput = document.getElementById(`box-${rowId}-${columnId + 1}`);
                 if (nextInput) {
                     nextInput.focus(); // Move focus to the next input
+                    lastFocusedInput = nextInput; // Update the last focused input
                 } else {
-                    // If no next input in the current row, move to the first input in the next row
-                    const nextRowFirstInput = document.getElementById(`box-${parseInt(rowId) + 1}-1`);
-                    if (nextRowFirstInput) {
-                        nextRowFirstInput.focus();
-                    }
+                    // If no next input in the current row, keep focus on the last input in the row
+                    activeInput.focus();
+                    lastFocusedInput = activeInput; // Ensure last box in the row is focused
                 }
             }
         }
     }
-    
+
     function handleVirtualKeyClick(event) {
         console.log('Virtual key clicked:', event.target.textContent);
         let key;
@@ -446,8 +462,14 @@ document.addEventListener('DOMContentLoaded', async function() {
                 event.target.classList.remove('enlarge');
             }, 200); 
         });
+
+        box.addEventListener('focus', () => {
+            lastFocusedInput = box;
+        });
+
         box.addEventListener('input', moveFocus);
         box.addEventListener('input', toUpperCase); // Convert input to uppercase
+        
         box.addEventListener('keydown', handleEnter);
         box.addEventListener('keydown', handleBackspace); // Handle Backspace key
         
