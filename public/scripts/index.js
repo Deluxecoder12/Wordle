@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', async function() {
+    
     // Initialize game variables
     let targetWord = await getRandomWord();
     let attempts = 0;
@@ -7,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // For alerts
     let isAlertActive = false;
 
+    // For virtual keyboard's focus
     let lastFocusedInput = null;
 
     // Function to show the custom alert
@@ -46,7 +48,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         setTimeout(closeAlert, 10000);
     }
 
-    
+    // Color for fireworks
     function getRandomColor() {
         const letters = '0123456789ABCDEF';
         let color = '#';
@@ -56,7 +58,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         return color;
     }
 
-    //Function to get a random 5-letter word
+    // Function to get a random 5-letter word: API and Backup
     async function getRandomWord() {
         try {
             const response = await fetch('/api/word');
@@ -99,8 +101,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
         
-    
-
+    // Function to check user's input
     async function isValidWord(word) {
         const response = await fetch(`/api/validate-word?word=${word}`, {
             method: 'GET',
@@ -120,7 +121,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             // Check if the user's guess is valid using the API
             const isValid = await isValidWord(guess);
              
-            // If the API says the word is invalid, check if it matches the fetched target word
+            // Invalid case: check if it matches the fetched target word. (This API is not the best, but it's free!)
             if (!isValid && guess !== targetWord) {
                 showAlert('Invalid word!');
                 return;
@@ -211,6 +212,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         return true;
     }
 
+    // Function to create Celebratory Fireworks
     function createFirework(container) {
         const fireworkContainer = document.createElement('div');
         fireworkContainer.classList.add('firework-container');
@@ -237,12 +239,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Function to handle Enter key press
     async function handleEnter(event) {
+        // Only for Standard Events
         const isStandardEvent = event && typeof event.preventDefault === 'function';
         const key = isStandardEvent ? event.key : 'Enter';
 
         if (key === 'Enter') {
             if (isAlertActive) {
-                // If the alert is active, don't handle guess-cell Enter key events
+                // If the alert is active, don't handle Enter key events
                 return;
             }
 
@@ -262,7 +265,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 const result = await checkGuess(guess, targetWord);
 
                 if (!result) {
-                    return; // If checkGuess returned undefined (i.e., invalid word), stop further execution
+                    return; // If checkGuess returned undefined, stop further execution
                 }
 
                 // Apply flip animation to each guess box
@@ -371,7 +374,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     //     document.querySelector('#box-1-1').focus();
     // }
 
-    // FIXME: VIRTUAl KEYBOARD DOESN'T WORK!
     function handleKeyPress(key) {
         console.log('handleKeyPress called with key:', key);
     
@@ -449,7 +451,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
 
-    // Attach event listeners to all guess boxes
+    // Event listeners in all guess boxes
     const guessBoxes = document.querySelectorAll('.guess-box');
     guessBoxes.forEach(box => {
         box.addEventListener('input', filterInput); // Filter input to allow only alphabets
@@ -475,7 +477,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         
     });
 
-    // Set focus on the first input box on page load
     setRowEditable(1); // Enable the first row and disable others
-    guessBoxes[0].focus();
+    guessBoxes[0].focus(); // Set focus on the first input box on page load
 });
