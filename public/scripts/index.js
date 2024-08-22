@@ -1,4 +1,44 @@
 document.addEventListener('DOMContentLoaded', async function() {
+    let isAlertActive = false;
+    
+    // Function to show the custom alert
+    function showAlert(message) {
+        isAlertActive = true; // Alert is now active
+
+        const alertContainer = document.createElement('div');
+        alertContainer.classList.add('alert-container');
+        alertContainer.innerHTML = `
+            <p>${message}</p>
+            <button id="alert-close-button">Close</button>
+        `;
+        document.body.appendChild(alertContainer);
+    
+        // Add event listener to close alert with Enter key
+        function handleEnter(event) {
+            if (event.key === 'Enter') {
+                closeAlert();
+            }
+        }
+    
+        // Add event listener to the document for Enter key
+        document.addEventListener('keydown', handleEnter);
+    
+        // Add event listener to the close button
+        const closeButton = document.getElementById('alert-close-button');
+        closeButton.addEventListener('click', closeAlert);
+    
+        // Remove event listener when alert closes
+        function closeAlert() {
+            alertContainer.remove();
+            document.removeEventListener('keydown', handleEnter);
+            isAlertActive = false;
+        }
+    
+        // Automatically close the alert after 10 seconds
+        setTimeout(closeAlert, 10000);
+    }
+
+    
     function getRandomColor() {
         const letters = '0123456789ABCDEF';
         let color = '#';
@@ -77,11 +117,11 @@ document.addEventListener('DOMContentLoaded', async function() {
              
             // If the API says the word is invalid, check if it matches the fetched target word
             if (!isValid && guess !== targetWord) {
-                alert('Invalid word!');
+                showAlert('Invalid word!');
                 return;
             }
         } catch (error) { 
-            alert('Error validating word. Please try again.');
+            showAlert('Error validating word. Please try again.');
             return;
         }
 
@@ -193,6 +233,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Function to handle Enter key press
     async function handleEnter(event) {
         if (event.key === 'Enter') {
+            if (isAlertActive) {
+                // If the alert is active, don't handle guess-cell Enter key events
+                return;
+            }
+
+            event.preventDefault(); // Prevent the default behavior of Enter key
+
             const currentInput = event.target;
             const rowId = parseInt(currentInput.id.split('-')[1]); // Get the row number from the id
 
@@ -232,7 +279,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                         const wordContainer = document.querySelector(`#box-${rowId}-1`).closest('section');
                         createFirework(wordContainer);
 
-                        //alert(`Congratulations! You've guessed the word: ${targetWord}`);
+                        showAlert(`<span class="bold-text">Congratulations!</span> You've guessed the word: ${targetWord}`);
                         setTimeout(() => window.location.reload(), 3000); // Reload the page after alert
                     }, 550);
                     return;
@@ -241,19 +288,15 @@ document.addEventListener('DOMContentLoaded', async function() {
                 // Move focus to the next row if there are more attempts left
                 attempts++;
                 if (attempts >= maxAttempts) {
-                    alert(`Game Over! The word was: ${targetWord}`);
-                    setTimeout(() => window.location.reload(), 100); // Reload the page after alert
+                    showAlert(`<span class="bold-text">Game Over!</span> The word was: ${targetWord}`);
+                    setTimeout(() => window.location.reload(), 1500); // Reload the page after alert
                 } else {
                     setRowEditable(rowId + 1); // Enable the next row and disable previous rows
                     const nextRow = document.querySelector(`#box-${rowId + 1}-1`);
                     if (nextRow) {
                         nextRow.focus();
                     }
-                }
-
-                event.preventDefault(); // Prevent the default behavior of Enter key
-            } else {
-                alert(`Please fill all boxes in row ${rowId} before pressing Enter.`);
+                }  
             }
         }
     }
@@ -297,25 +340,27 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
+    // FIXME: MIGHT BE NEEDED IN MULTIPLAYER MODE
     // Function to reset the game
-    function resetGame() {
-        // Clear all inputs
-        const allInputs = document.querySelectorAll('.guess-box');
-        allInputs.forEach(input => {
-            input.value = '';
-            input.disabled = false;
-            input.classList.remove('no-caret');
-            input.classList.remove('green', 'yellow', 'grey');
-        });
+    // function resetGame() {
+    //     // Clear all inputs
+    //     const allInputs = document.querySelectorAll('.guess-box');
+    //     allInputs.forEach(input => {
+    //         input.value = '';
+    //         input.disabled = false;
+    //         input.classList.remove('no-caret');
+    //         input.classList.remove('green', 'yellow', 'grey');
+    //     });
 
-        // Reset game variables
-        targetWord = getRandomWord();
-        attempts = 0;
+    //     // Reset game variables
+    //     targetWord = getRandomWord();
+    //     attempts = 0;
 
-        // Set focus on the first input box
-        document.querySelector('#box-1-1').focus();
-    }
+    //     // Set focus on the first input box
+    //     document.querySelector('#box-1-1').focus();
+    // }
 
+    // FIXME: VIRTUAl KEYBOARD DOESN'T WORK!
     function handleKeyPress(key) {
         console.log('handleKeyPress called with key:', key);
         
