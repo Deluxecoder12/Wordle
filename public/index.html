@@ -12,7 +12,7 @@
     <header>
         <nav>
             <ul>
-                <li class="Heading"><a href="#">Wordle Unlimited</a></li>
+                <li class="Heading"><a href="/">Wordle Unlimited</a></li>
                 <li class="Left"><a href="#"><img src="assets/images/Question_icon.png" alt="How to Play?"></a></li> <!--Instructions on how to play-->
                 <li class="Left"><a href="#"><img src="assets/images/Multiplayer_icon.png" alt="Multiplayer"></a></li> 
                 <li><a href="#"><img src="assets/images/Stats_icon.png" alt="Game Stats"></a></li> <!--Will show a graph of score history-->
@@ -159,5 +159,100 @@
             </div>
         </div>
     </section>
+
+    <!-- --------------------------------------HOW-TO-PLAY------------------------------------->
+    <aside>
+        <div id="overlay" class="hidden"></div>
+        <div id="instruction-card" class="hidden">
+            <button type="button" id="close-button" aria-label="Close">&times;</button>
+            
+            <h2> How to Play Wordle Unlimited? </h2> 
+                <p>Welcome to Wordle Unlimited! Here's how you can enjoy the game:</p>
+                    
+            <h3>Objective</h3>
+                <p>Your goal is to guess the secret 5-letter word within six attempts. Each guess must be a valid 5-letter word.</p>
+                    
+            <h3>How to Play?</h3>
+
+                <h4>Enter Your Guess:</h4>
+                <ol>        
+                    <li>Type any valid 5-letter word in the input box and press Enter or click the Submit button.</li>
+                    <li>The game will compare your guess to the secret word and provide feedback.</li>
+                </ol>
+                
+                <h3>Feedback:</h3>
+                <div class="feedback-legend">
+                    <div class="feedback-legend-item">
+                        <span class="letter green"></span>
+                        <p>Correct letter and position</p>
+                    </div>
+                    <div class="feedback-legend-item">
+                        <span class="letter yellow"></span>
+                        <p>Correct letter but wrong position</p>
+                    </div>
+                    <div class="feedback-legend-item">
+                        <span class="letter red"></span>
+                        <p>Letter not in the word</p>
+                    </div>
+                </div>
+                
+                <h4>Examples</h4>
+                <p>Here are some examples to help you understand how feedback is given:</p>
+                <div class="example-container">
+                    <div class="example">
+                        <h4>Example 1:</h4>
+                        <p>Guess: <strong>CRANE</strong></p>
+                        <p>Feedback:</p>
+                        <div class="feedback">
+                            <span class="letter green">C</span>
+                            <span class="letter yellow">R</span>
+                            <span class="letter red">A</span>
+                            <span class="letter red">N</span>
+                            <span class="letter red">E</span>
+                        </div>
+                        <p>Explanation: The letter <strong>C</strong> is in the correct position, <strong>R</strong> is in the word but not in the correct position, and the other letters are not in the word.</p>
+                    </div>
+                    <div class="example">
+                        <h4>Example 2:</h4>
+                        <p>Guess: <strong>STARE</strong></p>
+                        <p>Feedback:</p>
+                        <div class="feedback">
+                            <span class="letter red">S</span>
+                            <span class="letter red">T</span>
+                            <span class="letter green">A</span>
+                            <span class="letter red">R</span>
+                            <span class="letter red">E</span>
+                        </div>
+                        <p>Explanation: The letter <strong>A</strong> is in the correct position, and the other letters are not in the word.</p>
+                    </div>
+                </div>
+            
+                <h4>Strategy <img src="assets/images/strategy-icon-darkmode.png" alt="Strategy Icon" class="strategy-icon"></h4>    
+                <div class="strategy">
+                    <p>Use the feedback to refine your guesses. For example, if a letter is green, try to keep it in the same position in your next guesses. If it's yellow, move it to another position.</p>
+                </div>
+
+                <h4>Win or Lose</h4>
+                <div class="win-lose">
+                    <p><img src="assets/images/winner-icon-darkmode.png" alt="Win Icon" class="win-icon">If you guess the word correctly within six tries, you win!</p>   
+                    <p class="icon-text"><img src="assets/images/lose-icon-darkmode.png" alt="Lose Icon" class="lose-icon">If you don't guess the word in six tries, the game will reveal the secret word.</p>
+                </div>
+            
+            
+            <h3>Unlimited Play</h3>            
+            <p>There's no limit to how many times you can play! Refresh the page or click the Wordle Unlimited button to start a new game with a new word.</p>
+
+            <h3>Tips <img src="assets/images/tips-icon-darkmode.png" alt="Tips Icon" class="tips-icon"></h3>
+            <div class="tips">
+                <ol>
+                    <li>Start with a word that includes common vowels and consonants, like "audio" or "crane."</li>
+                    <li>Think carefully about each letter's position based on the feedback you receive.</li>
+                    <li>Use each guess strategically to eliminate as many letters as possible.</li>
+                </ol>
+            </div>
+
+            <h2>Good luck, and enjoy playing Wordle Unlimited!</h2>
+        </div>
+    </aside>
 </body>
 </html>

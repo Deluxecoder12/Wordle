@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             return;
         }
 
-        const result = Array(5).fill('grey'); // Default background color
+        const result = Array(5).fill('red'); // Default background color
         const targetLetterCount = {}; // Track letter frequencies in the target word
 
         // Count occurrences of each letter in the target word
@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         // Second pass: Check for incorrect placements (yellow)
         for (let i = 0; i < 5; i++) {
-            if (result[i] === 'grey' && targetLetterCount[guess[i]] > 0) {
+            if (result[i] === 'red' && targetLetterCount[guess[i]] > 0) {
                 result[i] = 'yellow';
                 targetLetterCount[guess[i]]--; // Reduce the count for incorrectly placed letters
             }
@@ -363,7 +363,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     //         input.value = '';
     //         input.disabled = false;
     //         input.classList.remove('no-caret');
-    //         input.classList.remove('green', 'yellow', 'grey');
+    //         input.classList.remove('green', 'yellow', 'red');
     //     });
 
     //     // Reset game variables
@@ -375,8 +375,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     // }
 
     function handleKeyPress(key) {
-        console.log('handleKeyPress called with key:', key);
-    
         // Use the last focused input box instead of document.activeElement
         const activeInput = lastFocusedInput;
     
@@ -387,9 +385,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     
         const rowId = activeInput.id.split('-')[1];
         const columnId = parseInt(activeInput.id.split('-')[2]);
-    
-        console.log('Active input box ID:', activeInput.id);
-        console.log('Row ID:', rowId, 'Column ID:', columnId);
     
         if (key === 'Backspace') {
             if (activeInput.value.length > 0) {
@@ -431,7 +426,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     function handleVirtualKeyClick(event) {
-        console.log('Virtual key clicked:', event.target.textContent);
         let key;
         if (event.target.id === 'backspace') {
             key = 'Backspace';
@@ -440,7 +434,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         } else {
             key = event.target.dataset.key;
         }
-        console.log('Key determined:', key);
         if (key) {
             handleKeyPress(key);
         }
@@ -476,6 +469,33 @@ document.addEventListener('DOMContentLoaded', async function() {
         box.addEventListener('keydown', handleBackspace); // Handle Backspace key
         
     });
+
+    // -----------------HOW-TO-PLAY-CARD-----------------------------
+    const instructionCard = document.getElementById('instruction-card');
+    const overlay = document.getElementById('overlay');
+    const closeButton = document.getElementById('close-button');
+
+    const toggleCardVisibility = (e) => {
+        e.preventDefault();
+        if (instructionCard.classList.contains('hidden')) {
+            instructionCard.classList.remove('hidden');
+            instructionCard.classList.add('visible');
+            overlay.classList.remove('hidden');
+            overlay.classList.add('visible');
+        } else {
+            instructionCard.classList.remove('visible');
+            instructionCard.classList.add('hidden');
+            overlay.classList.remove('visible');
+            overlay.classList.add('hidden');
+        }
+    };
+
+    // Show the card and overlay when the question mark icon is clicked
+    document.querySelector('.Left a[href="#"]').addEventListener('click', toggleCardVisibility);
+
+    // Hide the card and overlay when the close button is clicked or clicking outside of the card
+    closeButton.addEventListener('click', toggleCardVisibility);
+    overlay.addEventListener('click', toggleCardVisibility);
 
     setRowEditable(1); // Enable the first row and disable others
     guessBoxes[0].focus(); // Set focus on the first input box on page load

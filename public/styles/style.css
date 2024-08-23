@@ -106,8 +106,8 @@ section{
     background-color: rgba(255, 255, 0, 0.871);
 }
 
-.grey {
-    background-color: grey;
+.red {
+    background-color: #ff000096;
 }
 
 .alert-container {
@@ -199,6 +199,7 @@ section{
     white-space: nowrap;
 }
 
+/*----------------------Virtual Keyboard------------------------*/
 .virtual-keyboard {
     display: flex;
     flex-direction: column;
@@ -276,6 +277,213 @@ section{
     animation: flip 0.6s ease-in-out;
     animation-fill-mode: forwards; /* Keeps the end state after the animation */
 }
+
+/*------------------------HOW-TO-PLAY----------------------*/
+/* Hide overlay and card by default */
+#overlay.hidden, #instruction-card.hidden {
+    display: none;
+}
+
+/* Overlay styling */
+#overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(183, 183, 183, 0.8); /* White background with opacity */
+    z-index: 999; 
+}
+
+/* Card styling */
+#instruction-card {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px;
+    height: 600px;
+    background: #000000;
+    border: 1px solid #ccc;
+    color: rgb(245, 245, 245);
+    padding: 30px;
+    padding-top: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000; 
+    transition: opacity 0.3s ease-in-out;
+    overflow-y: scroll;
+}
+
+#instruction-card.hidden {
+    opacity: 0;
+    pointer-events: none; /* Disable interactions when hidden */
+}
+
+#instruction-card.visible {
+    opacity: 1;
+    pointer-events: auto; /* Enable interactions when visible */
+}
+
+/* Custom scrollbar styles */
+#instruction-card::-webkit-scrollbar {
+    width: 7px; /* Width of the scrollbar */
+}
+
+#instruction-card::-webkit-scrollbar-track {
+    background: #333; /* Color of the scrollbar track */
+}
+
+#instruction-card::-webkit-scrollbar-thumb {
+    background: #888; /* Color of the scrollbar thumb */
+    border-radius: 10px; /* Rounded corners for the scrollbar thumb */
+}
+
+#instruction-card::-webkit-scrollbar-thumb:hover {
+    background: #555; /* Color of the scrollbar thumb on hover */
+}
+
+/* Spacing and alignment for instruction card content */
+#instruction-card h2,
+#instruction-card h3,
+#instruction-card h4 {
+    margin-bottom: 10px;
+}
+
+#instruction-card p {
+    margin-bottom: 15px;
+}
+
+#instruction-card ol {
+    margin-bottom: 15px;
+    padding-left: 30px; /* Add padding to the left for the list */
+}
+
+#instruction-card li {
+    margin-bottom: 10px;
+}
+
+#instruction-card h2 {
+    font-size: 24px;
+}
+
+#instruction-card h3 {
+    font-size: 20px;
+}
+
+#instruction-card h4 {
+    font-size: 18px;
+}
+
+/* Style for the close button */
+#close-button {
+    position: sticky;
+    top: 30px;
+    left: 100%; 
+    width: 35px;
+    height: 35px;
+    font-size: 20px;
+    background: transparent;
+    color: whitesmoke;
+    border: none;
+    cursor: pointer;
+    outline: none;
+    border-radius: 50%; /* Circle shape */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1010; /* Ensure it is above the card */
+}
+
+/* Cross icon */
+#close-button::before {
+    font-size: 20px;
+    color: #fff;
+}
+
+/* Circle appearance on hover */
+#close-button:hover {
+    background-color: rgba(255, 255, 255, 0.3); /* Light background for hover effect */
+}
+
+#close-button:active {
+    background-color: rgba(255, 255, 255, 0.5); /* Slightly more opaque background on click */
+}
+
+
+.example-container {
+    margin-top: 20px;
+}
+
+.example {
+    margin-bottom: 20px;
+}
+
+.feedback {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.feedback .letter {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    text-align: center;
+    line-height: 20px;
+    color: #fff;
+    font-weight: bold;
+}
+
+.feedback .letter.green {
+    background-color: #6aaa64; /* Green color */
+}
+
+.feedback .letter.yellow {
+    background-color: #c9b458; /* Yellow color */
+}
+
+.feedback .letter.red {
+    background-color: #ff000096; /* Red color */
+}
+
+.feedback-legend {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.feedback-legend-item {
+    display: flex;
+    place-content: center;
+    place-items: center;
+    gap: 10px;
+}
+
+.feedback-legend-item .letter {
+    width: 30px;
+    height: 30px;
+}
+
+.feedback-legend-item p{
+    padding-top: 15px;
+}
+
+.strategy-icon, .tips-icon, .win-icon, .lose-icon {
+    width: 24px;
+    height: 24px;
+    vertical-align: middle;
+    margin-right: 10px;
+    margin-bottom: 3px;
+}
+
+.icon-text {
+    display: flex;
+    align-items: center; /* Aligns items vertically center */
+    gap: 1px;
+}
+
 
 /* Adjust styles for screens smaller than 768px
 @media (max-width: 768px) {
