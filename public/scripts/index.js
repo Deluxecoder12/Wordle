@@ -11,6 +11,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // For virtual keyboard's focus
     let lastFocusedInput = null;
 
+    // For Hard Mode
+    let gameStarted = false;
+
     // Accessible Fonts
     function changeFontSize(action) {
         const currentSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-size'));
@@ -166,6 +169,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         const result = Array(5).fill('red'); // Default background color
         const targetLetterCount = {}; // Track letter frequencies in the target word
+        gameStarted = true;
 
         // Count occurrences of each letter in the target word
         for (let letter of targetWord) {
@@ -594,21 +598,30 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Add event listener for the div click
         div.addEventListener('click', (e) => {
             // Only toggle if the click is not on the checkbox itself
-            if (e.target !== checkbox) {
-                checkbox.checked = !checkbox.checked;
-                updateBackground();
-                // Dispatch the change event
-                checkbox.dispatchEvent(new Event('change'));
+            if (!gameStarted) {
+                // Only toggle if the click is not on the checkbox itself
+                if (e.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    updateBackground();
+                    // Dispatch the change event to handle additional logic
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            } else {
+                showAlert("Cannot change settings after the game has started!");
             }
         });
     
         // Ensure the checkbox click works normally and updates the background
         checkbox.addEventListener('click', (e) => {
             e.stopPropagation(); // Stop propagation to prevent triggering the div click event
-            updateBackground();
+            if (!gameStarted) {
+                updateBackground(); // Allow the checkbox to update the background
+            } else {
+                showAlert("Cannot change settings after the game has started");
+                e.preventDefault(); // Prevent the checkbox from toggling
+            }
         });
     
-        // Initial background setup
         updateBackground();
     };
     
@@ -710,9 +723,19 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Handle hard mode toggle change
     const handleHardModeChange = (event) => {
+        event.preventDefault();
+
         const hardModeEnabled = event.target.checked;
-        localStorage.setItem('hard-mode-enabled', hardModeEnabled);
-        toggleHardMode(hardModeEnabled);
+
+        if (!gameStarted) {
+            localStorage.setItem('hard-mode-enabled', hardModeEnabled);
+            toggleHardMode(hardModeEnabled);
+            console.log("Hard mode toggled:", hardModeEnabled);
+        } else {
+            // Prevent hard mode change if the game has already started
+            console.log("Cannot toggle hard mode after the game has started");
+            event.target.checked = !hardModeEnabled;
+        }
     };
 
     // Add event listener for the theme toggle checkbox
@@ -748,12 +771,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 unchecked: '../assets/images/sound-off.png',
                 checked: '../assets/images/sound-on.png'
             };
-        } else if (option.id === 'color-blind-option') {
-            icons = {
-                unchecked: '../assets/images/color-circle.png',
-                checked: '../assets/images/contrast.png'
-            };
-        }
+        } 
     
         if (checkbox && icons) {
             toggleSlider(option, checkbox, icons);
