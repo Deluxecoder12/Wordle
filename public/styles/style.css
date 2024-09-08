@@ -4,15 +4,36 @@
     box-sizing: border-box;
 }
 
+/* Base colors */
+:root {
+    --background-color: whitesmoke;
+    --text-color: #000000;
+    --font-size: 16px;
+}
+
+/* Dark mode overrides */
+[data-theme='dark'] {
+    --background-color: #000; 
+    --text-color: #ffffff; 
+}
+
+[data-theme='light'] {
+    --background-color: #fff;
+    --text-color: #000;
+}
+
 html{
     font-family: Arial, Helvetica, sans-serif;
-    background-color: black;
-    color: white;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-size: var(--font-size);
 }
 
 header{
     padding: 1em;
     border-bottom: 0.1em solid red;
+    min-width: fit-content;
+    user-select: none;
 }
 
 ul{
@@ -41,7 +62,7 @@ li{
 
 a{
     text-decoration: none;
-    color: white;
+    color: var(--text-color);
 }
 
 li a:hover, img:hover{
@@ -54,7 +75,7 @@ img{
 }
 
 section{
-    padding: 3rem;
+    padding: 2rem;
     display: flex;
     place-content: center;
     place-items: center;
@@ -62,24 +83,27 @@ section{
 }
 
 .word-guess{
-    padding: 3px;
+    padding: 10px;
     display: flex;
-    flex-flow: column;
+    flex-flow: column nowrap;
     gap: 10px;
     justify-content: space-between;
-    max-width: fit-content;
+    min-width: fit-content;
 }
 
 .guess-row{
-    width: 100%;
+    padding: 5px;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 /* Default style for input boxes */
 .guess-box {
     max-width: 2.2ch;
+    max-height: fit-content;
     font-size: 2.5em;
-    background-color: black;
-    color: whitesmoke;
+    background-color: var(--background-color);
+    color: var(--text-color);
     text-align: center;
     border: 2px solid #444; /* Original border color */
     transition: #444 0.3s ease; /*Smooth transition for border color */
@@ -87,6 +111,7 @@ section{
 
 
 .glow {
+    border-width: 3px;
     border-color: #fff;
     box-shadow: 0 0 5px #f00;
 }
@@ -121,8 +146,8 @@ section{
     font-weight: normal;
     transform: translateX(-50%);
     z-index: 10000; 
-    background-color: black;
-    color: white;
+    background-color: var(--background-color);
+    color: var(--text-color);
     border-radius: 8px;
     padding: 10px 20px; 
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
@@ -150,7 +175,6 @@ section{
     margin: 0px 15px;
     white-space: nowrap; /* Prevent button text from wrapping */
 }
-
 
 .firework-container {
     position: fixed; /* Position relative to the viewport */
@@ -186,6 +210,7 @@ section{
     }
 }
 
+/* For screen-readers */
 .sr-only {
     position: absolute;
     width: 1px;
@@ -241,6 +266,7 @@ section{
 
 #enter {
     width: 70px;
+    min-width: fit-content;
 }
 
 /* For input letters */
@@ -326,20 +352,20 @@ section{
 }
 
 /* Custom scrollbar styles */
-#instruction-card::-webkit-scrollbar {
+#instruction-card::-webkit-scrollbar, #settings-card::-webkit-scrollbar {
     width: 7px; /* Width of the scrollbar */
 }
 
-#instruction-card::-webkit-scrollbar-track {
+#instruction-card::-webkit-scrollbar-track , #settings-card::-webkit-scrollbar-track{
     background: #333; /* Color of the scrollbar track */
 }
 
-#instruction-card::-webkit-scrollbar-thumb {
+#instruction-card::-webkit-scrollbar-thumb, #settings-card::-webkit-scrollbar-thumb {
     background: #888; /* Color of the scrollbar thumb */
     border-radius: 10px; /* Rounded corners for the scrollbar thumb */
 }
 
-#instruction-card::-webkit-scrollbar-thumb:hover {
+#instruction-card::-webkit-scrollbar-thumb:hover, #settings-card::-webkit-scrollbar-thumb:hover {
     background: #555; /* Color of the scrollbar thumb on hover */
 }
 
@@ -376,7 +402,7 @@ section{
 }
 
 /* Style for the close button */
-#close-button {
+#close-button, #close-button-settings {
     position: sticky;
     top: 30px;
     left: 100%; 
@@ -396,20 +422,19 @@ section{
 }
 
 /* Cross icon */
-#close-button::before {
+#close-button::before, #close-button-settings::before {
     font-size: 20px;
     color: #fff;
 }
 
 /* Circle appearance on hover */
-#close-button:hover {
+#close-button:hover, #close-button-settings:hover  {
     background-color: rgba(255, 255, 255, 0.3); /* Light background for hover effect */
 }
 
-#close-button:active {
+#close-button:active, #close-button-settings:active {
     background-color: rgba(255, 255, 255, 0.5); /* Slightly more opaque background on click */
 }
-
 
 .example-container {
     margin-top: 20px;
@@ -482,6 +507,235 @@ section{
     display: flex;
     align-items: center; /* Aligns items vertically center */
     gap: 1px;
+}
+
+/* ----------------------Settings------------------- */
+#settings-card {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px;
+    height: 600px;
+    background: #000000;
+    border: 1px solid #ccc;
+    color: rgb(245, 245, 245);
+    padding: 30px;
+    padding-top: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    transition: opacity 0.3s ease-in-out;
+    overflow-y: scroll;
+    
+}
+
+#settings-card.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#settings-card.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Spacing between Settings title and content */
+.settings-content {
+    margin-top: 20px;
+}
+
+.setting-option::before {
+    content: "";
+    position: absolute;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 0; /* Keep it behind the main content */
+}
+
+/* Styling for each setting option */
+.setting-option {
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    user-select: none;
+    position: relative;
+    z-index: 1;
+}
+
+.setting-option:hover {
+    background-color: rgba(255, 255, 255, 0.358);
+}
+
+.setting-option label {
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.setting-option p {
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #ffffff;
+    user-select: none;
+}
+
+.slider-toggle {
+    position: relative;
+    width: 45px;
+    height: 25px;
+    background: #ccc;
+    outline: none;
+    border-radius: 25px;
+    transition: background 0.3s;
+    cursor: pointer;
+}
+
+.slider-toggle::before {
+    content: "";
+    position: absolute;
+    width: 23px;
+    height: 23px;
+    border-radius: 50%;
+    background: #ffffff;
+    transition: transform 0.3s;
+    left: 1px;
+    top: 1px;
+}
+
+.slider-toggle:checked {
+    background: #6aaa64; /* Green for on state */
+}
+
+.slider-toggle:checked::before {
+    transform: translateX(20px);
+}
+
+#font-size-controls {
+    border-color: white;
+    border-width: 5px;
+    border-style: solid;
+}
+
+/* Font buttons styling */
+.font-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px; 
+    margin-top: 10px; 
+}
+
+.font-buttons button {
+    background-color: #6aaa64; 
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 15px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.2s;
+    outline: none;
+    user-select: none;
+}
+
+.font-buttons button:hover {
+    background-color: #5c9956;
+}
+
+.font-buttons button:active {
+    transform: scale(0.95);
+}
+
+/* Accessibility: Focus state */
+.font-buttons button:focus {
+    outline: 2px solid #fff; /* Visible outline on focus */
+    outline-offset: 2px;
+}
+
+#theme-option {
+    background-image: url('../assets/images/moon-icon.png');
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: 80px 80px;
+    border-width: 5px;
+    border-style: solid;
+}
+
+#hard-mode-option {
+    background-image: url('../assets/images/baby-icon.png');
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: 80px 80px;
+    border-color: transparent;
+    border-width: 5px;
+    border-style: solid;
+}
+
+#sound-effects-option {
+    background-image: url('../assets/images/sound-on.png');
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: 80px 80px;
+    border-color: #fff;
+    border-width: 5px;
+    border-style: solid;
+}
+
+#color-blind-option {
+    background-image: url('../assets/images/color-circle.png');
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: 80px 80px;
+    border-color: purple;
+    border-width: 5px;
+    border-style: solid;
+}
+
+
+/* Custom slider style */
+input[type="checkbox"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 40px;
+    height: 20px;
+    background-color: #ccc;
+    border-radius: 50px;
+    position: relative;
+    outline: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease-in-out;
+}
+
+input[type="checkbox"]:checked {
+    background-color: #6aaa64; /* Color for checked state */
+}
+
+input[type="checkbox"]::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background-color: #fff;
+    border-radius: 50%;
+    top: 1px;
+    left: 1px;
+    transition: transform 0.3s ease-in-out;
+}
+
+input[type="checkbox"]:checked::before {
+    transform: translateX(20px);
 }
 
 

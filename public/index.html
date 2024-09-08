@@ -6,17 +6,17 @@
     <title>Wordle Unlimited</title>
     <link rel="icon" href="../src/assets/images/frame-grid-icon.png">
     <link rel="stylesheet" href="styles/style.css">
-    <script type="module" src="scripts/index.js"></script>
+    <script type="module" src="scripts/index.js" defer></script>
 </head>
 <body>
     <header>
         <nav>
             <ul>
                 <li class="Heading"><a href="/">Wordle Unlimited</a></li>
-                <li class="Left"><a href="#"><img src="assets/images/Question_icon.png" alt="How to Play?"></a></li> <!--Instructions on how to play-->
-                <li class="Left"><a href="#"><img src="assets/images/Multiplayer_icon.png" alt="Multiplayer"></a></li> 
-                <li><a href="#"><img src="assets/images/Stats_icon.png" alt="Game Stats"></a></li> <!--Will show a graph of score history-->
-                <li><a href="#"><img src="assets/images/Settings_icon.png" alt="Settings"></a></li> <!--Settings to choose: Hard Mode, Dark Mode...-->
+                <li class="Left"><a href="#"><img id="question-icon" src="assets/images/Question_icon.png" alt="How to Play?"></a></li> <!--Instructions on how to play-->
+                <li class="Left"><a href="#"><img id="multiplayer-icon" src="assets/images/Multiplayer_icon.png" alt="Multiplayer"></a></li> 
+                <li><a href="#"><img id="stats-icon" src="assets/images/Stats_icon.png" alt="Game Stats"></a></li> <!--Will show a graph of score history-->
+                <li><a href="#" id="settings-link"><img id="settings-icon" src="assets/images/Settings_icon.png" alt="Settings"></a></li> <!--Settings to choose: Hard Mode, Dark Mode...-->
             </ul>
         </nav>
     </header>
@@ -160,9 +160,11 @@
         </div>
     </section>
 
-    <!-- --------------------------------------HOW-TO-PLAY------------------------------------->
+    <!----------------------------------------NAV-ICONS-FUNCTIONALITY------------------------------------->
     <aside>
         <div id="overlay" class="hidden"></div>
+        
+        <!----------------------------------------HOW-TO-PLAY------------------------------------->
         <div id="instruction-card" class="hidden">
             <button type="button" id="close-button" aria-label="Close">&times;</button>
             
@@ -252,6 +254,45 @@
             </div>
 
             <h2>Good luck, and enjoy playing Wordle Unlimited!</h2>
+        </div>
+        
+        <div id="settings-card" class="hidden">   
+            <button type="button" id="close-button-settings" aria-label="Close">&times;</button>
+            <h2>Settings</h2>
+            <div class="settings-content">
+                <!-- Font Setting -->
+                <div class="setting-option" id="font-size-controls">
+                    <label for="font-toggle">Font</label>
+                    <p>Adjust the font size for the game interface.</p>
+                    <div class="font-buttons">
+                        <button id="increase-font" aria-label="Increase Font Size">A+</button>
+                        <button id="decrease-font" aria-label="Decrease Font Size">A-</button>
+                    </div>
+                </div>
+                <!-- Theme Setting -->
+                <div class="setting-option" id="theme-option">
+                    <label for="theme-toggle">Theme</label>
+                    <p>Toggle between a dark theme and a light theme for the game interface.</p>
+                    <input type="checkbox" id="theme-toggle" class="slider-toggle" checked>
+                </div>
+                <!-- Hard Mode Setting -->
+                <div class="setting-option" id="hard-mode-option">
+                    <label for="hard-mode-toggle">Hard Mode</label>
+                    <p>Enforces stricter gameplay rules, such as requiring the use of revealed hints in subsequent guesses.</p>
+                    <input type="checkbox" id="hard-mode-toggle" class="slider-toggle">
+                </div>
+                <!-- Sound Effects Setting -->
+                <div class="setting-option" id="sound-effects-option">
+                    <label for="sound-effects-toggle">Sound Effects</label>
+                    <p>Toggle the sound effects during gameplay on or off.</p>
+                    <input type="checkbox" id="sound-effects-toggle" class="slider-toggle" checked>
+                </div>
+                <!-- Daily Challenge Setting -->
+                <div class="setting-option" id="daily-challenge-option">
+                    <label for="daily-challenge-toggle">Daily Challenge</label>
+                    <p>Enable or disable the daily challenge mode, where players can attempt a special word once per day.</p>
+                </div>
+            </div>
         </div>
     </aside>
 </body>

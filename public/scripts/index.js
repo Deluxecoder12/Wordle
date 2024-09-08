@@ -11,6 +11,39 @@ document.addEventListener('DOMContentLoaded', async function() {
     // For virtual keyboard's focus
     let lastFocusedInput = null;
 
+    // Accessible Fonts
+    function changeFontSize(action) {
+        const currentSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-size'));
+        let newSize = currentSize;
+
+        if (action === 'increase') {
+            newSize += 2; // Increase by 2px
+        } else if (action === 'decrease') {
+            newSize -= 2; // Decrease by 2px
+        }
+
+        // Set minimum and maximum font size limits if needed
+        if (newSize < 12) newSize = 12;
+        if (newSize > 36) newSize = 36;
+
+        // Apply the new font size
+        document.documentElement.style.setProperty('--font-size', `${newSize}px`);
+
+        // Optionally save the preference in local storage
+        localStorage.setItem('font-size', `${newSize}px`);
+    }
+
+    // Load the saved font size from local storage (if any) on page load
+    const savedFontSize = localStorage.getItem('font-size');
+    if (savedFontSize) {
+        document.documentElement.style.setProperty('--font-size', savedFontSize);
+    }
+
+    // Attach event listeners to buttons
+    document.getElementById('increase-font').addEventListener('click', () => changeFontSize('increase'));
+    document.getElementById('decrease-font').addEventListener('click', () => changeFontSize('decrease'));
+    
+
     // Function to show the custom alert
     function showAlert(message) {
         isAlertActive = true; // Alert is now active
@@ -410,6 +443,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (activeInput.value.length === 0) { // Only set the value if the input is empty
                 activeInput.value = key; // Set the value of the active input
                 activeInput.classList.add('glow'); // Add glow effect
+
+                 // Trigger the enlarge animation
+                activeInput.classList.add('enlarge');
+                setTimeout(() => {
+                    activeInput.classList.remove('enlarge');
+                }, 200);
                 
                 // Move focus to the next input in the same row
                 const nextInput = document.getElementById(`box-${rowId}-${columnId + 1}`);
@@ -470,32 +509,268 @@ document.addEventListener('DOMContentLoaded', async function() {
         
     });
 
-    // -----------------HOW-TO-PLAY-CARD-----------------------------
+    // -----------------NAV-BAR-ICON-FUNCTIONALITY-----------------------------
     const instructionCard = document.getElementById('instruction-card');
+    const settingsCard = document.getElementById('settings-card');
     const overlay = document.getElementById('overlay');
-    const closeButton = document.getElementById('close-button');
+    const closeButtonInstruction = document.getElementById('close-button');
+    const closeButtonSettings = document.getElementById('close-button-settings');
+    const settingsLink = document.getElementById('settings-link');
 
-    const toggleCardVisibility = (e) => {
-        e.preventDefault();
-        if (instructionCard.classList.contains('hidden')) {
-            instructionCard.classList.remove('hidden');
-            instructionCard.classList.add('visible');
+    const toggleCardVisibility = (card) => {
+        if (card.classList.contains('hidden')) {
+            card.classList.remove('hidden');
+            card.classList.add('visible');
             overlay.classList.remove('hidden');
             overlay.classList.add('visible');
         } else {
-            instructionCard.classList.remove('visible');
-            instructionCard.classList.add('hidden');
+            card.classList.remove('visible');
+            card.classList.add('hidden');
             overlay.classList.remove('visible');
             overlay.classList.add('hidden');
         }
     };
 
-    // Show the card and overlay when the question mark icon is clicked
-    document.querySelector('.Left a[href="#"]').addEventListener('click', toggleCardVisibility);
+    // Show the instruction card and overlay when the question mark icon is clicked
+    document.querySelector('.Left a[href="#"]').addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleCardVisibility(instructionCard);
+    });
 
-    // Hide the card and overlay when the close button is clicked or clicking outside of the card
-    closeButton.addEventListener('click', toggleCardVisibility);
-    overlay.addEventListener('click', toggleCardVisibility);
+    // Show the settings card when the settings button is clicked
+    settingsLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleCardVisibility(settingsCard);
+    });
+
+    // Hide the instruction card, settings card and overlay when the close button or overlay is clicked
+    closeButtonInstruction.addEventListener('click', () => toggleCardVisibility(instructionCard));
+    overlay.addEventListener('click', () => {
+        if (instructionCard.classList.contains('visible')) {
+            toggleCardVisibility(instructionCard);
+        }
+        if (settingsCard.classList.contains('visible')) {
+            toggleCardVisibility(settingsCard);
+        }
+    });
+
+    const toggleSlider = (div, checkbox, icons) => {
+        if (!icons) {
+            console.warn('Icons object is not defined for', div.id);
+            return;
+        }
+        const updateBackground = () => {
+            if (div.id === 'theme-option') {
+                if (checkbox.checked) {
+                    div.style.backgroundImage = `url('${icons.checked}')`;
+                    div.style.backgroundColor = '#001f3f';
+                    div.style.borderColor = '#a9a9a9';
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                    div.style.backgroundImage = `url('${icons.unchecked}')`;
+                    div.style.backgroundColor = 'lightblue';
+                    div.style.borderColor = '#fff';
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            } else if(div.id === 'hard-mode-option'){
+                if (checkbox.checked) {
+                    div.style.backgroundImage = `url('${icons.checked}')`;
+                    div.style.borderColor = '#f00';
+                } else {
+                    div.style.backgroundImage = `url('${icons.unchecked}')`;
+                    div.style.borderColor = 'transparent';
+                }
+            } else if(div.id === 'sound-effects-option'){
+                if (checkbox.checked) {
+                    div.style.backgroundImage = `url('${icons.checked}')`;
+                    div.style.borderColor = '#fff';
+                } else {
+                    div.style.backgroundImage = `url('${icons.unchecked}')`;
+                    div.style.borderColor = 'transparent';
+                }
+            }   
+        };
+    
+        // Add event listener for the div click
+        div.addEventListener('click', (e) => {
+            // Only toggle if the click is not on the checkbox itself
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+                updateBackground();
+                // Dispatch the change event
+                checkbox.dispatchEvent(new Event('change'));
+            }
+        });
+    
+        // Ensure the checkbox click works normally and updates the background
+        checkbox.addEventListener('click', (e) => {
+            e.stopPropagation(); // Stop propagation to prevent triggering the div click event
+            updateBackground();
+        });
+    
+        // Initial background setup
+        updateBackground();
+    };
+    
+    // Function to update the icons based on the current theme
+    const updateIcons = () => {
+        const theme = document.documentElement.getAttribute('data-theme');
+    
+        const icons = {
+            stats: document.getElementById('stats-icon'),
+            question: document.getElementById('question-icon'),
+            multiplayer: document.getElementById('multiplayer-icon'),
+            settings: document.getElementById('settings-icon'),
+        };
+    
+        if (theme === 'dark') {
+            icons.stats.src = '../assets/images/Stats_icon.png';
+            icons.question.src = 'assets/images/Question_icon.png';
+            icons.multiplayer.src = 'assets/images/Multiplayer_icon.png';
+            icons.settings.src = 'assets/images/Settings_icon.png';
+        } else {
+            icons.stats.src = 'assets/images/Stats_icon-dark-mode.png';
+            icons.question.src = 'assets/images/Question_icon-dark-mode.png';
+            icons.multiplayer.src = 'assets/images/Multiplayer_icon-dark-mode.png';
+            icons.settings.src = 'assets/images/Settings_icon-dark-mode.png';  
+        }
+    };
+
+    // Function to enable or disable sound effects
+    const toggleSoundEffects = (enabled) => {
+        if (enabled) {
+            // Enable sound effects
+            console.log('Sound effects enabled');
+            // Add logic to enable sound effects
+        } else {
+            // Disable sound effects
+            console.log('Sound effects disabled');
+            // Add logic to disable sound effects
+        }
+    };
+
+    // Function to enable or disable hard mode
+    const toggleHardMode = (enabled) => {
+        if (enabled) {
+            console.log('Hard mode enabled');
+            // Add logic to enforce hard mode rules
+        } else {
+            console.log('Hard mode disabled');
+            // Add logic to relax hard mode rules
+        }
+    };
+
+    const loadSettings = () => {
+        // Load theme
+        const savedTheme = localStorage.getItem('data-theme');
+        if (savedTheme) {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            themeToggle.checked = savedTheme === 'dark';
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+            themeToggle.checked = false;
+        }
+
+        // Load sound effects setting
+        const savedSound = localStorage.getItem('sound-effects-enabled');
+        if (savedSound) {
+            soundToggle.checked = savedSound === 'true'; // Set checkbox based on saved sound setting
+            toggleSoundEffects(soundToggle.checked);
+        } else {
+            // Default to sound effects enabled
+            soundToggle.checked = true;
+            toggleSoundEffects(true);
+        }
+
+        // Load hard mode setting
+        const savedHardMode = localStorage.getItem('hard-mode-enabled');
+        if (savedHardMode) {
+            hardModeToggle.checked = savedHardMode === 'true'; // Set checkbox based on saved hard mode setting
+            toggleHardMode(hardModeToggle.checked);
+        } else {
+            hardModeToggle.checked = false; // Default to hard mode disabled
+            toggleHardMode(false);
+        }
+    };
+    
+    const handleThemeChange = (event) => {
+        const theme = event.target.checked ? 'dark' : 'light';
+        console.log(`Switching to ${theme} mode`);
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('data-theme', theme);
+        updateIcons(); // Ensure icons update
+    };
+
+    // Handle sound effects toggle change
+    const handleSoundChange = (event) => {
+        const soundEnabled = event.target.checked;
+        localStorage.setItem('sound-effects-enabled', soundEnabled);
+        toggleSoundEffects(soundEnabled);
+    };
+
+    // Handle hard mode toggle change
+    const handleHardModeChange = (event) => {
+        const hardModeEnabled = event.target.checked;
+        localStorage.setItem('hard-mode-enabled', hardModeEnabled);
+        toggleHardMode(hardModeEnabled);
+    };
+
+    // Add event listener for the theme toggle checkbox
+    const themeToggle = document.getElementById('theme-toggle');
+    const soundToggle = document.getElementById('sound-effects-toggle');
+    const hardModeToggle = document.getElementById('hard-mode-toggle');
+    themeToggle.addEventListener('change', handleThemeChange);
+    soundToggle.addEventListener('change', handleSoundChange);
+    hardModeToggle.addEventListener('change', handleHardModeChange);
+    
+    loadSettings();
+    updateIcons();
+
+
+    // Attach event listeners to each setting option with their corresponding icons
+    document.querySelectorAll('.setting-option').forEach(option => {
+        const checkbox = option.querySelector('.slider-toggle');
+        let icons;
+    
+        // Define icons based on option ID
+        if (option.id === 'theme-option') {
+            icons = {
+                unchecked: '../assets/images/sun-icon.png',
+                checked: '../assets/images/moon-icon.png'
+            };
+        } else if (option.id === 'hard-mode-option') {
+            icons = {
+                unchecked: '../assets/images/baby-icon.png',
+                checked: '../assets/images/skull-darkmode.png'
+            };
+        } else if (option.id === 'sound-effects-option') {
+            icons = {
+                unchecked: '../assets/images/sound-off.png',
+                checked: '../assets/images/sound-on.png'
+            };
+        } else if (option.id === 'color-blind-option') {
+            icons = {
+                unchecked: '../assets/images/color-circle.png',
+                checked: '../assets/images/contrast.png'
+            };
+        }
+    
+        if (checkbox && icons) {
+            toggleSlider(option, checkbox, icons);
+        }
+    
+    });
+
+    
+
+    // FIXME: FUNCTION TO GET DAILY WORD
+    // document.getElementById('daily-challenge-button').addEventListener('click', () => {
+    //     // Call the API to get the daily word and start the challenge
+    //     fetchDailyChallengeWord();
+    // });
+
+    // Hide the settings card when the close button is clicked
+    closeButtonSettings.addEventListener('click', () => toggleCardVisibility(settingsCard));
 
     setRowEditable(1); // Enable the first row and disable others
     guessBoxes[0].focus(); // Set focus on the first input box on page load
