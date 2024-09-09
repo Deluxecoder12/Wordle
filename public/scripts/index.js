@@ -17,6 +17,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     let correctPositions = {};
     let requiredLetters = {};
 
+    // For Sound
+    let soundEffectsEnabled = true;
+    const keyboardSound = document.getElementById('keyboard-sound');
+
     // Accessible Fonts
     function changeFontSize(action) {
         const currentSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-size'));
@@ -230,7 +234,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Check correct positions
         for (const [index, letter] of Object.entries(correctPositions)) {
             if (guess[index] !== letter) {
-                showAlert(`Index ${Number(index) + 1} must be letter ${letter}!`);
+                showAlert(`Hard Mode!!Index ${Number(index) + 1} must be letter ${letter}!`);
                 return false; // Letter in correct position doesn't match
             }
         }
@@ -238,7 +242,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Check required letters
         for (const letter in requiredLetters) {
             if (!guess.includes(letter)) {
-                showAlert(`Guess does not include required letter: ${letter}!`);
+                showAlert(`Hard Mode!!Guess does not include required letter: ${letter}!`);
                 return false; // Required letter is missing
             }
         }
@@ -332,6 +336,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         const key = isStandardEvent ? event.key : 'Enter';
 
         if (key === 'Enter') {
+            if(soundEffectsEnabled) playKeyboardSound();
+            else keyboardSound.pause();
+            
             if (isAlertActive) {
                 // If the alert is active, don't handle Enter key events
                 return;
@@ -429,6 +436,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Function to handle Backspace key press
     function handleBackspace(event) {
         if (event.key === 'Backspace') {
+            if(soundEffectsEnabled) playKeyboardSound();
+            else keyboardSound.pause();
             const currentInput = event.target;
             const rowId = currentInput.id.split('-')[1]; // Get the row number from the id
             const columnId = parseInt(currentInput.id.split('-')[2]); // Get the column number from the id
@@ -714,15 +723,36 @@ document.addEventListener('DOMContentLoaded', async function() {
     };
 
     // Function to enable or disable sound effects
-    const toggleSoundEffects = (enabled) => {
+    const toggleSoundEffects = (enabled) => {   
         if (enabled) {
             // Enable sound effects
             console.log('Sound effects enabled');
-            // Add logic to enable sound effects
+            soundEffectsEnabled = true;
+            
+            document.addEventListener('keypress', playKeyboardSound);
+
+            document.querySelector('.virtual-keyboard').addEventListener('click', playKeyboardSound);
+
         } else {
             // Disable sound effects
             console.log('Sound effects disabled');
-            // Add logic to disable sound effects
+            soundEffectsEnabled = false;
+            
+            document.removeEventListener('keypress', playKeyboardSound);
+
+            document.querySelector('.virtual-keyboard').removeEventListener('click', playKeyboardSound);
+        }
+    };
+
+    const playKeyboardSound = () => {
+        if (soundEffectsEnabled) {
+            const keyboardSound = document.getElementById('keyboard-sound');
+            if (keyboardSound) {
+                keyboardSound.currentTime = 0; // Restart the audio
+                keyboardSound.play().catch(error => {
+                    console.error('Error playing audio:', error);
+                });
+            }
         }
     };
 
