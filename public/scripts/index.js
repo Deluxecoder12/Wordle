@@ -12,7 +12,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     let lastFocusedInput = null;
 
     // For Hard Mode
+    let hardModeEnabled = false;
     let gameStarted = false;
+    let correctPositions = {};
+    let requiredLetters = {};
 
     // Accessible Fonts
     function changeFontSize(action) {
@@ -167,6 +170,14 @@ document.addEventListener('DOMContentLoaded', async function() {
             return;
         }
 
+        // Check hard mode rules if enabled
+        if (hardModeEnabled) {
+            if (!validateHardModeGuess(guess)) {
+                showAlert('Guess does not meet hard mode requirements!');
+                return;
+            }
+        }
+
         const result = Array(5).fill('red'); // Default background color
         const targetLetterCount = {}; // Track letter frequencies in the target word
         gameStarted = true;
@@ -194,6 +205,46 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         return result;
     }
+
+    // Function to update hard mode state based on the user's guess
+    const updateHardModeState = async (guess, targetWord) => {
+        // First, validate the guess
+        const isValid = await validateHardModeGuess(guess);
+        if (!isValid) {
+            return false; // Don't update state if the guess is invalid
+        }
+       
+        guess.split('').forEach((letter, index) => {
+            if (targetWord[index] === letter) {
+                correctPositions[index] = letter; // Letter in correct position
+            } else if (targetWord.includes(letter)) {
+                requiredLetters[letter] = true; // Letter exists but in incorrect position
+            }
+        });
+
+        return true; 
+    };
+
+    // Function to validate a guess in hard mode
+    const validateHardModeGuess = async (guess) => {
+        // Check correct positions
+        for (const [index, letter] of Object.entries(correctPositions)) {
+            if (guess[index] !== letter) {
+                showAlert(`Index ${Number(index) + 1} must be letter ${letter}!`);
+                return false; // Letter in correct position doesn't match
+            }
+        }
+
+        // Check required letters
+        for (const letter in requiredLetters) {
+            if (!guess.includes(letter)) {
+                showAlert(`Guess does not include required letter: ${letter}!`);
+                return false; // Required letter is missing
+            }
+        }
+
+        return true;
+    };
 
     // Function to enable only the current row and disable others
     function setRowEditable(rowId) {
@@ -300,9 +351,18 @@ document.addEventListener('DOMContentLoaded', async function() {
                 
                 // Check the guess against the target word
                 const result = await checkGuess(guess, targetWord);
-
+                
                 if (!result) {
                     return; // If checkGuess returned undefined, stop further execution
+                }
+
+                // Validate the guess against hard mode rules
+                if (hardModeEnabled) {
+                    const stateUpdated = await updateHardModeState(guess, targetWord);
+                    if (!stateUpdated) {
+                        console.log('State update failed.');
+                        return; // Exit if the state was not updated
+                    }
                 }
 
                 // Apply flip animation to each guess box
@@ -594,32 +654,36 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             }   
         };
-    
+ 
         // Add event listener for the div click
         div.addEventListener('click', (e) => {
-            // Only toggle if the click is not on the checkbox itself
-            if (!gameStarted) {
-                // Only toggle if the click is not on the checkbox itself
-                if (e.target !== checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    updateBackground();
-                    // Dispatch the change event to handle additional logic
-                    checkbox.dispatchEvent(new Event('change'));
+            if(div.id === 'hard-mode-option') {
+                if(gameStarted) {
+                    showAlert("Cannot change settings after the game has started!");
+                    return;
                 }
-            } else {
-                showAlert("Cannot change settings after the game has started!");
+            }
+
+            // Only toggle if the click is not on the checkbox itself
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+                updateBackground();
+                // Dispatch the change event to handle additional logic
+                checkbox.dispatchEvent(new Event('change'));
             }
         });
     
         // Ensure the checkbox click works normally and updates the background
         checkbox.addEventListener('click', (e) => {
             e.stopPropagation(); // Stop propagation to prevent triggering the div click event
-            if (!gameStarted) {
-                updateBackground(); // Allow the checkbox to update the background
-            } else {
-                showAlert("Cannot change settings after the game has started");
-                e.preventDefault(); // Prevent the checkbox from toggling
-            }
+            if(div.id === 'hard-mode-option') {
+                if(gameStarted) {
+                    e.preventDefault();
+                    showAlert("Cannot change settings after the game has started!");
+                    return;
+                }
+            } 
+            updateBackground(); // Allow the checkbox to update the background
         });
     
         updateBackground();
@@ -666,10 +730,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     const toggleHardMode = (enabled) => {
         if (enabled) {
             console.log('Hard mode enabled');
-            // Add logic to enforce hard mode rules
+            hardModeEnabled = true;
+            correctPositions = {};
+            requiredLetters = {};
         } else {
             console.log('Hard mode disabled');
-            // Add logic to relax hard mode rules
+            hardModeEnabled = false;
         }
     };
 
@@ -776,10 +842,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (checkbox && icons) {
             toggleSlider(option, checkbox, icons);
         }
-    
     });
-
-    
 
     // FIXME: FUNCTION TO GET DAILY WORD
     // document.getElementById('daily-challenge-button').addEventListener('click', () => {
