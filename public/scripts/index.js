@@ -1,9 +1,42 @@
 document.addEventListener('DOMContentLoaded', async function() {
     
     // Initialize game variables
-    let targetWord = await getRandomWord();
     let attempts = 0;
     const maxAttempts = 6;
+    let targetWord;
+
+    // Function to get or generate the daily challenge word
+    const getDailyChallengeWord = async () => {
+        const savedWordData = JSON.parse(localStorage.getItem('dailyChallenge'));
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
+
+        // Check if the stored word is for today
+        if (savedWordData && savedWordData.date === today) {
+            return savedWordData.word; // Return today's word
+        } else {
+            // Generate a new word for the day
+            const newWord = await getRandomWord();
+
+            // Save the new word and today's date in localStorage
+            localStorage.setItem('dailyChallenge', JSON.stringify({
+                word: newWord,
+                date: today
+            }));
+
+            console.log(`New daily challenge word: ${newWord}`);
+            return newWord;
+        }
+    };
+
+    const dailyChallengeMode = localStorage.getItem('dailyChallengeMode');
+    
+    if (dailyChallengeMode === 'true') {
+        const dailyWord = await getDailyChallengeWord();
+        targetWord = dailyWord;
+    } else {
+        // Regular mode, choose a word as normal
+        targetWord = await getRandomWord();
+    }
     
     // For alerts
     let isAlertActive = false;
@@ -874,11 +907,22 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
-    // FIXME: FUNCTION TO GET DAILY WORD
-    // document.getElementById('daily-challenge-button').addEventListener('click', () => {
-    //     // Call the API to get the daily word and start the challenge
-    //     fetchDailyChallengeWord();
-    // });
+    document.getElementById('daily-challenge-option').addEventListener('click', async () => {
+        const dailyWord = await getDailyChallengeWord(); // Get the word for today
+        localStorage.setItem('targetWord', dailyWord);
+    
+        localStorage.setItem('dailyChallengeMode', 'true'); // Flag to indicate daily challenge mode
+        location.reload(); // Refresh the page to apply the changes
+    });
+    
+    // Handle opting out by clicking on the title
+    document.querySelector('.Heading a').addEventListener('click', () => {
+        localStorage.removeItem('dailyChallengeMode'); // Remove the flag for daily challenge mode
+        localStorage.removeItem('targetWord'); // Optionally, remove the target word
+    
+        // Refresh the page to exit the daily challenge mode
+        location.reload();
+    });
 
     // Hide the settings card when the close button is clicked
     closeButtonSettings.addEventListener('click', () => toggleCardVisibility(settingsCard));
