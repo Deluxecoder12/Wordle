@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             return words[randomIndex]; // Fallback word
         }
     }
-        
+      
     // Function to check user's input
     async function isValidWord(word) {
         const response = await fetch(`/api/validate-word?word=${word}`, {
