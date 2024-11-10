@@ -267,7 +267,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Check correct positions
         for (const [index, letter] of Object.entries(correctPositions)) {
             if (guess[index] !== letter) {
-                showAlert(`Hard Mode!!Index ${Number(index) + 1} must be letter ${letter}!`);
+                showAlert(`Hard Mode!! Index ${Number(index) + 1} must be letter ${letter}!`);
                 return false; // Letter in correct position doesn't match
             }
         }
@@ -275,7 +275,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Check required letters
         for (const letter in requiredLetters) {
             if (!guess.includes(letter)) {
-                showAlert(`Hard Mode!!Guess does not include required letter: ${letter}!`);
+                showAlert(`Hard Mode!! Guess does not include required letter: ${letter}!`);
                 return false; // Required letter is missing
             }
         }
