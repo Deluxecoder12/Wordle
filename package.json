@@ -2,11 +2,11 @@
   "name": "wordle",
   "version": "1.0.0",
   "description": "",
-  "main": "server.js",
+  "main": "src/components/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node components/server.js",
-    "dev": "nodemon components/server.js"
+    "start": "node ",
+    "dev": "nodemon "
   },
   "engines": {
     "node": ">=18.0.0"
