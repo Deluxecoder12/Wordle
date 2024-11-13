@@ -14,10 +14,10 @@
         <nav>
             <ul>
                 <li class="Heading"><a href="/">Wordle Unlimited</a></li>
-                <li class="Left"><a href="#"><img id="question-icon" src="assets/images/Question_icon.png" alt="How to Play?"></a></li> <!--Instructions on how to play-->
-                <li class="Left"><a href="#"><img id="multiplayer-icon" src="assets/images/Multiplayer_icon.png" alt="Multiplayer"></a></li> 
+                <li class="Left question"><img id="question-icon" src="assets/images/Question_icon.png" alt="How to Play?"></li>
+                <li class="Left"><img id="multiplayer-icon" src="assets/images/Multiplayer_icon.png" alt="Multiplayer"></li> 
                 <li><a href="#"><img id="stats-icon" src="assets/images/Stats_icon.png" alt="Game Stats"></a></li> <!--Will show a graph of score history-->
-                <li><a href="#" id="settings-link"><img id="settings-icon" src="assets/images/Settings_icon.png" alt="Settings"></a></li> <!--Settings to choose: Hard Mode, Dark Mode...-->
+                <li><a href="#" id="settings-link"><img id="settings-icon" src="assets/images/Settings_icon.png" alt="Settings"></a></li>
             </ul>
         </nav>
     </header>
@@ -292,6 +292,44 @@
                 <div class="setting-option" id="daily-challenge-option">
                     <label for="daily-challenge-toggle">Daily Challenge</label>
                     <p>Enable or disable the daily challenge mode, where players can attempt a special word once per day.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Replace your current multiplayer dropdown with this -->
+        <div id="multiplayer-modal" class="hidden">
+            <div class="modal-content">
+                <button type="button" class="close" aria-label="Close">&times;</button>
+                <h2>Multiplayer Mode</h2>
+                
+                <!-- Lobby Section -->
+                <div id="lobby-section">
+                    <div class="join-room-section">
+                        <input type="text" 
+                               id="room-code-input" 
+                               placeholder="Enter Room Code" 
+                               maxlength="6"
+                               pattern="[A-Z0-9]{6}"
+                               title="6 character room code">
+                        <div class="button-group">
+                            <button id="join-room-btn" class="primary-btn">Join Room</button>
+                            <button id="create-room-btn" class="primary-btn">Create Room</button>
+                        </div>
+                    </div>
+                </div>
+        
+                <!-- Room Information Section -->
+                <div id="room-info" class="hidden">
+                    <h3>Room Information</h3>
+                    <p id="room-code-display"></p>
+                    <div class="player-list">
+                        <h4>Players:</h4>
+                        <ul id="player-list-container"></ul>
+                    </div>
+                    <div class="game-controls">
+                        <button id="start-game-btn" class="primary-btn hidden">Start Game</button>
+                        <div id="game-timer" class="hidden">Time: <span id="timer-display">5:00</span></div>
+                    </div>
                 </div>
             </div>
         </div>

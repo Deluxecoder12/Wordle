@@ -493,26 +493,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // FIXME: MIGHT BE NEEDED IN MULTIPLAYER MODE
-    // Function to reset the game
-    // function resetGame() {
-    //     // Clear all inputs
-    //     const allInputs = document.querySelectorAll('.guess-box');
-    //     allInputs.forEach(input => {
-    //         input.value = '';
-    //         input.disabled = false;
-    //         input.classList.remove('no-caret');
-    //         input.classList.remove('green', 'yellow', 'red');
-    //     });
-
-    //     // Reset game variables
-    //     targetWord = getRandomWord();
-    //     attempts = 0;
-
-    //     // Set focus on the first input box
-    //     document.querySelector('#box-1-1').focus();
-    // }
-
     function handleKeyPress(key) {
         // Use the last focused input box instead of document.activeElement
         const activeInput = lastFocusedInput;
@@ -623,22 +603,27 @@ document.addEventListener('DOMContentLoaded', async function() {
     const closeButtonSettings = document.getElementById('close-button-settings');
     const settingsLink = document.getElementById('settings-link');
 
-    const toggleCardVisibility = (card) => {
-        if (card.classList.contains('hidden')) {
-            card.classList.remove('hidden');
-            card.classList.add('visible');
+    function toggleCardVisibility(element) {
+        // For instruction and settings cards
+        if (element.classList.contains('hidden')) {
+            element.classList.remove('hidden');
+            element.classList.add('visible');
             overlay.classList.remove('hidden');
-            overlay.classList.add('visible');
         } else {
-            card.classList.remove('visible');
-            card.classList.add('hidden');
-            overlay.classList.remove('visible');
+            element.classList.remove('visible');
+            element.classList.add('hidden');
             overlay.classList.add('hidden');
         }
-    };
+    
+        // Reset modal state if it's the multiplayer modal
+        if (element.id === 'multiplayer-modal' && element.classList.contains('hidden')) {
+            if (lobbySection) lobbySection.classList.remove('hidden');
+            if (roomInfoSection) roomInfoSection.classList.add('hidden');
+        }
+    }
 
     // Show the instruction card and overlay when the question mark icon is clicked
-    document.querySelector('.Left a[href="#"]').addEventListener('click', (e) => {
+    document.querySelector('.Left.question').addEventListener('click', (e) => {
         e.preventDefault();
         toggleCardVisibility(instructionCard);
     });
@@ -651,14 +636,22 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Hide the instruction card, settings card and overlay when the close button or overlay is clicked
     closeButtonInstruction.addEventListener('click', () => toggleCardVisibility(instructionCard));
-    overlay.addEventListener('click', () => {
+    overlay.addEventListener('click', closeAllModals);
+
+    function closeAllModals() {
+        // Close instruction card
         if (instructionCard.classList.contains('visible')) {
             toggleCardVisibility(instructionCard);
         }
+        // Close settings card
         if (settingsCard.classList.contains('visible')) {
             toggleCardVisibility(settingsCard);
         }
-    });
+        // Close multiplayer modal
+        if (multiplayerModal.classList.contains('visible')) {
+            toggleCardVisibility(multiplayerModal);
+        }
+    }
 
     const toggleSlider = (div, checkbox, icons) => {
         if (!icons) {
@@ -759,7 +752,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     const toggleSoundEffects = (enabled) => {   
         if (enabled) {
             // Enable sound effects
-            console.log('Sound effects enabled');
             soundEffectsEnabled = true;
             
             document.addEventListener('keypress', playKeyboardSound);
@@ -768,7 +760,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         } else {
             // Disable sound effects
-            console.log('Sound effects disabled');
             soundEffectsEnabled = false;
             
             document.removeEventListener('keypress', playKeyboardSound);
@@ -792,12 +783,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Function to enable or disable hard mode
     const toggleHardMode = (enabled) => {
         if (enabled) {
-            console.log('Hard mode enabled');
             hardModeEnabled = true;
             correctPositions = {};
             requiredLetters = {};
         } else {
-            console.log('Hard mode disabled');
             hardModeEnabled = false;
         }
     };
@@ -867,18 +856,43 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     };
 
-    // Add event listener for the theme toggle checkbox
+    // Add event listener for the settings toggle
     const themeToggle = document.getElementById('theme-toggle');
     const soundToggle = document.getElementById('sound-effects-toggle');
     const hardModeToggle = document.getElementById('hard-mode-toggle');
     themeToggle.addEventListener('change', handleThemeChange);
     soundToggle.addEventListener('change', handleSoundChange);
     hardModeToggle.addEventListener('change', handleHardModeChange);
-    
+
+    //Add event 
     loadSettings();
     updateIcons();
 
+    const multiplayerIcon = document.getElementById('multiplayer-icon');
+    const multiplayerModal = document.getElementById('multiplayer-modal');
+    const closeButtonMultiplayer = multiplayerModal.querySelector('.close');
+    const roomInfoSection = document.getElementById('room-info');
+    const lobbySection = document.getElementById('lobby-section');
 
+    // Show modal when clicking multiplayer icon
+    multiplayerIcon.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleCardVisibility(multiplayerModal);
+    });
+    
+    // Update the close button handler
+    closeButtonMultiplayer.addEventListener('click', () => {
+        e.preventDefault();
+        toggleCardVisibility(multiplayerModal);
+    });
+
+
+    // Prevent modal from closing when clicking inside the modal
+    const modalContent = multiplayerModal.querySelector('.modal-content');
+    modalContent.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+    
     // Attach event listeners to each setting option with their corresponding icons
     document.querySelectorAll('.setting-option').forEach(option => {
         const checkbox = option.querySelector('.slider-toggle');

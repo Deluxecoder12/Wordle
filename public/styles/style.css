@@ -727,7 +727,138 @@ input[type="checkbox"]:checked::before {
     transform: translateX(20px);
 }
 
+.Left.question{
+    cursor: pointer;
+}
 
+#multiplayer-icon {
+    cursor: pointer;
+} 
+  
+#multiplayer-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 350px;
+    max-height: fit-content;
+    background: #000000;
+    border: 1px solid #ccc;
+    color: rgb(245, 245, 245);
+    padding: 20px;
+    padding-top: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    transition: opacity 0.3s ease-in-out;
+}
+
+#multiplayer-modal.hidden {
+    opacity: 0;
+    pointer-events: none;
+    display: none;
+}
+
+#multiplayer-modal.visible {
+    opacity: 1;
+    pointer-events: auto;
+    display: block;
+}
+
+.modal-content {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    padding: 20px;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 350px;
+    position: relative;
+}
+
+.join-room-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0 0px 0;
+}
+
+.create-room-section {
+    margin-top: 5px;
+    text-align: center;
+}
+
+#room-code-input {
+    margin-top: 15px;
+    padding: 8px;
+    font-size: 1.2em;
+    text-align: center;
+    width: 200px;
+    font-family: monospace;
+}
+
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.primary-btn {
+    background-color: #ff0000;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    margin: 5px;
+    transition: background-color 0.3s;
+}
+
+.primary-btn:hover {
+    background-color: #ff0000c1;
+}
+
+.primary-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.player-list {
+    margin: 20px 0;
+}
+
+.player-list ul {
+    list-style: none;
+    padding: 0;
+}
+
+.player-list li {
+    padding: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#game-timer {
+    font-size: 1.2em;
+    font-weight: bold;
+    text-align: center;
+    margin: 10px 0;
+}
+
+.close {
+    position: absolute;
+    right: 0px;
+    font-size: 24px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--text-color);
+}
+
+.hidden {
+    display: none;
+}
 /* Adjust styles for screens smaller than 768px
 @media (max-width: 768px) {
     .guess-cell {

@@ -126,6 +126,18 @@ app.get('/api/validate-word', async (req, res) => {
     }
 });
 
+function startGameTimer(roomId) {
+    rooms[roomId].timer = setTimeout(() => {
+        // End the game and send the final scores to all players
+        const room = rooms[roomId];
+        io.to(roomId).emit('gameEnded', { players: room.players });
+
+        // Clean up the room
+        delete rooms[roomId];
+    }, 5 * 60 * 1000); // 5 minutes in milliseconds
+}
+
+
 // Socket.IO connection event
 io.on('connection', (socket) => {
     console.log(`Player connected: ${socket.id}`);
@@ -136,26 +148,49 @@ io.on('connection', (socket) => {
         if (!rooms[roomId]) {
             rooms[roomId] = {
                 targetWord: await getRandomWord(),
-                players: {} // Store player scores here
+                players: {}, // Store Players' scores
+                maxPlayers: 8,
+                timer: null,
+                playersReady: 0
             };
         }
 
-        // Add player to the room's player list with score 0
-        rooms[roomId].players[socket.id] = { username, score: 0 };
+        if (Object.keys(rooms[roomId].players).length < rooms[roomId].maxPlayers) {
+            // Add player to the room's player list with score 0
+            rooms[roomId].players[socket.id] = { username, score: 0 };
+            rooms[roomId].playersReady++;
 
-        // Join the Socket.IO room
-        socket.join(roomId);
+            // Join the Socket.IO room
+            socket.join(roomId);
 
-        // Notify the player of the current game state
-        socket.emit('gameState', {
-            targetWord: rooms[roomId].targetWord,
-            players: rooms[roomId].players
-        });
+            // Notify the player of the current game state
+            socket.emit('gameState', {
+                targetWord: rooms[roomId].targetWord,
+                players: rooms[roomId].players
+            });
 
-        console.log(`${username} joined room: ${roomId}`);
+            console.log(`${username} joined room: ${roomId}`);
 
-        // Broadcast to others in the room
-        socket.broadcast.to(roomId).emit('playerJoined', { username });
+            // Broadcast to others in the room
+            socket.broadcast.to(roomId).emit('playerJoined', { username });
+        } else {
+            socket.emit('roomFull');
+            return;
+        }
+    });
+
+    socket.on('startGame', (roomId) => {
+        const room = rooms[roomId];
+        if (room) {
+            // Check if all players are ready to start the game
+            if (Object.keys(room.players).length === room.maxPlayers) {
+                startGameTimer(roomId);
+                io.to(roomId).emit('gameStarted');
+            } else {
+                // Notify the player that the game hasn't started yet
+                socket.emit('notEnoughPlayers');
+            }
+        }
     });
 
     // Handle player's word guess
@@ -196,11 +231,17 @@ io.on('connection', (socket) => {
 
                 // If no players left, delete the room
                 if (Object.keys(rooms[roomId].players).length === 0) {
+                    clearTimeout(rooms[roomId].timer);
                     delete rooms[roomId];
                 }
                 break;
             }
         }
+    });
+
+    // Handle game end
+    socket.on('gameEnded', () => {
+        io.to(socket.room).emit('gameEnded', { players: rooms[socket.room].players });
     });
 });
 
