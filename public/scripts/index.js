@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     const maxAttempts = 6;
     let targetWord;
 
+    let currentUsername = null;
+
     // Initialize socket connection
     const socket = io('http://localhost:3001', {
         reconnection: true,
@@ -658,6 +660,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         // Close multiplayer modal
         if (multiplayerModal.classList.contains('visible')) {
+            if (currentRoom) {
+                if (confirm('Are you sure you want to leave the room? Your progress will be lost.')) {
+                    leaveRoom();
+                }
+                return;
+            }
             toggleCardVisibility(multiplayerModal);
         }
     }
@@ -889,8 +897,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Get DOM elements
     const nameInputModal = document.getElementById('name-input-modal');
     const playerNameInput = document.getElementById('player-name-input');
-    const confirmNameBtn = document.getElementById('confirm-name-btn');
-    const randomNameBtn = document.getElementById('random-name-btn');
     const nameError = document.getElementById('name-error');
     const createRoomBtn = document.getElementById('create-room-btn');
     const joinRoomBtn = document.getElementById('join-room-btn');
@@ -984,7 +990,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     socket.on('playerLeft', ({ username }) => {
-        showAlert(`${username} left the room`);
+        showAlert(`${username} has left the room`);
+        
+        // If this is the current player, reset the game state
+        if (username === currentUsername) {
+            resetGame();
+        }
     });
 
     socket.on('gameStarted', () => {
@@ -1031,10 +1042,48 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Show name input modal
     function showNameInputModal(roomCode) {
         console.log('showNameInputModal called with roomCode:', roomCode);
-    
-        // Remove existing listeners
+        
         const confirmBtn = document.getElementById('confirm-name-btn');
         const randomBtn = document.getElementById('random-name-btn');
+        
+        // Function to handle name confirmation
+        function handleConfirm() {
+            console.log('Confirm clicked');
+            const name = playerNameInput.value.trim();
+            console.log('Name entered:', name);
+    
+            if (name) {
+                currentUsername = name; // Store username
+                // Hide modals
+                nameInputModal.classList.add('hidden');
+                lobbySection.classList.add('hidden');
+                // Show room info
+                roomInfoSection.classList.remove('hidden');
+                // Update display
+                roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+                
+                // Join room
+                socket.emit('joinRoom', {
+                    roomId: roomCode,
+                    username: name
+                });
+                
+                // Clear input and error
+                playerNameInput.value = '';
+                nameError.classList.add('hidden');
+            } else {
+                nameError.classList.remove('hidden');
+            }
+        }
+        
+        // Function to handle random name generation
+        function handleRandomName() {
+            console.log('Random clicked');
+            const randomName = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
+            playerNameInput.value = randomName;
+            nameError.classList.add('hidden');
+            handleConfirm();
+        }
         
         // Clear old listeners by cloning and replacing buttons
         const newConfirmBtn = confirmBtn.cloneNode(true);
@@ -1043,36 +1092,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         randomBtn.parentNode.replaceChild(newRandomBtn, randomBtn);
         
         // Add new listeners
-        newConfirmBtn.addEventListener('click', function() {
-            console.log('Confirm clicked');
-            const name = document.getElementById('player-name-input').value.trim();
-            console.log('Name entered:', name);
-
-            if (name) {
-                // Hide name input modal
-                document.getElementById('name-input-modal').classList.add('hidden');
-                // Hide lobby section (where create/join buttons are)
-                lobbySection.classList.add('hidden');
-                // Show room info section
-                roomInfoSection.classList.remove('hidden');
-                // Update room code display
-                roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
-
-                socket.emit('joinRoom', {
-                    roomId: roomCode,
-                    username: name
-                });
-            } else {
-                document.getElementById('name-error').classList.remove('hidden');
-            }
-        });
-
-        newRandomBtn.addEventListener('click', function() {
-            console.log('Random clicked');
-            const randomName = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
-            document.getElementById('player-name-input').value = randomName;
-            document.getElementById('name-error').classList.add('hidden');
-        });
+        newConfirmBtn.addEventListener('click', handleConfirm);
+        newRandomBtn.addEventListener('click', handleRandomName);
     }
 
     let roomTimer = null;
@@ -1174,32 +1195,59 @@ document.addEventListener('DOMContentLoaded', async function() {
         resetGame();
     });
 
+    // Get the leave room button
+    const leaveRoomBtn = document.getElementById('leave-room-btn');
+
+    // Function to handle leaving room
+    function leaveRoom() {
+        if (currentRoom) {
+            // Notify server
+            socket.emit('leaveRoom', { 
+                roomId: currentRoom, 
+                username: currentUsername // Make sure to store username when joining
+            });
+
+            // Reset local state
+            resetGame();
+
+            // Show confirmation
+            showAlert('You have left the room');
+        }
+    }
+
     // Update reset game function
     function resetGame() {
-        // Clear the room timer if it exists
+        /// Clear room data
+        currentRoom = null;
+        currentUsername = null;
+
+        // Clear timers
         if (roomTimer) {
             clearInterval(roomTimer);
             roomTimer = null;
         }
+
+        // Reset UI
+        nameInputModal.classList.add('hidden');
+        roomInfoSection.classList.add('hidden');
+        lobbySection.classList.remove('hidden');
+        playerNameInput.value = '';
+        roomCodeInput.value = '';
+        playerListContainer.innerHTML = '';
 
         // Remove timer display if it exists
         const timerDisplay = document.getElementById('room-timer');
         if (timerDisplay) {
             timerDisplay.remove();
         }
-
-        // Reset other game elements
-        lobbySection.classList.remove('hidden');
-        roomInfoSection.classList.add('hidden');
-        nameInputModal.classList.add('hidden');
-        roomCodeInput.value = '';
-        currentRoom = null;
-
-         
-        // Hide modals
-        multiplayerModal.style.display = 'none';
-        overlay.classList.add('hidden');
     }
+
+    leaveRoomBtn.addEventListener('click', () => {
+        // Show confirmation dialog
+        if (confirm('Are you sure you want to leave the room? Your progress will be lost.')) {
+            leaveRoom();
+        }
+    });
 
     // Show modal when clicking multiplayer icon
     multiplayerIcon.addEventListener('click', (e) => {
@@ -1210,17 +1258,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
     
     closeButtonMultiplayer.addEventListener('click', () => {
+        
+        nameError.classList.add('hidden');
+        if (currentRoom) {
+            if (confirm('Are you sure you want to leave the room? Your progress will be lost.')) {
+                leaveRoom();
+            }
+            return;
+        }
         toggleCardVisibility(multiplayerModal);
         // Reset all states
         nameInputModal.classList.add('hidden');
         roomInfoSection.classList.add('hidden');
         lobbySection.classList.remove('hidden');
         playerNameInput.value = '';
-        nameError.classList.add('hidden');
-        if (currentRoom) {
-            socket.emit('leaveRoom', { roomId: currentRoom });
-            currentRoom = null;
-        }
     });
 
     // Prevent modal from closing when clicking inside the modal

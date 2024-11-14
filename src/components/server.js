@@ -242,6 +242,32 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('leaveRoom', ({ roomId, username }) => {
+        if (rooms[roomId] && rooms[roomId].players[socket.id]) {
+            // Remove player from room
+            delete rooms[roomId].players[socket.id];
+
+            // Notify other players
+            socket.broadcast.to(roomId).emit('playerLeft', { username });
+
+            // Leave the Socket.IO room
+            socket.leave(roomId);
+
+            // Update game state for remaining players
+            io.to(roomId).emit('gameState', {
+                players: rooms[roomId].players,
+                remainingTime: ROOM_TIMEOUT - (Date.now() - rooms[roomId].createdAt)
+            });
+
+            // If room is empty, clean it up
+            if (Object.keys(rooms[roomId].players).length === 0) {
+                cleanupRoom(roomId);
+            }
+
+            console.log(`${username} left room ${roomId}`);
+        }
+    });
+
     // Handle player's word guess
     socket.on('guessWord', async ({ roomId, guessedWord }) => {
         const room = rooms[roomId];
