@@ -126,6 +126,53 @@ app.get('/api/validate-word', async (req, res) => {
     }
 });
 
+// Constants for room management
+const ROOM_TIMEOUT = 30 * 60 * 1000; // 10 minutes in milliseconds
+const EMPTY_ROOM_CLEANUP_INTERVAL = 30 * 1000; // Check for empty rooms every 30 seconds
+
+// Function to check room expiry
+function checkRoomExpiry(roomId) {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    const now = Date.now();
+    const roomAge = now - room.createdAt;
+
+    if (roomAge >= ROOM_TIMEOUT) {
+        // Room expired
+        console.log(`Room ${roomId} expired after 10 minutes`);
+        // Notify all players in the room
+        io.to(roomId).emit('roomExpired');
+        // Clean up room
+        cleanupRoom(roomId);
+    }
+}
+
+// Function to clean up room
+function cleanupRoom(roomId) {
+    if (rooms[roomId]) {
+        // Clear any existing timeout
+        if (rooms[roomId].timeout) {
+            clearTimeout(rooms[roomId].timeout);
+        }
+        // Remove room
+        delete rooms[roomId];
+        console.log(`Room ${roomId} cleaned up`);
+    }
+}
+
+// Setup room cleanup interval
+setInterval(() => {
+    for (const roomId in rooms) {
+        const room = rooms[roomId];
+        // Check if room is empty
+        if (Object.keys(room.players).length === 0) {
+            console.log(`Cleaning up empty room ${roomId}`);
+            cleanupRoom(roomId);
+        }
+    }
+}, EMPTY_ROOM_CLEANUP_INTERVAL);
+
 function startGameTimer(roomId) {
     rooms[roomId].timer = setTimeout(() => {
         // End the game and send the final scores to all players
@@ -137,6 +184,13 @@ function startGameTimer(roomId) {
     }, 5 * 60 * 1000); // 5 minutes in milliseconds
 }
 
+io.on('connect_error', (error) => {
+    console.error('Socket.IO connect error:', error);
+});
+
+io.on('error', (error) => {
+    console.error('Socket.IO error:', error);
+});
 
 // Socket.IO connection event
 io.on('connection', (socket) => {
@@ -144,39 +198,34 @@ io.on('connection', (socket) => {
 
     // Player joins a room
     socket.on('joinRoom', async ({ roomId, username }) => {
-        // Check if room exists, if not, create a new room
-        if (!rooms[roomId]) {
-            rooms[roomId] = {
-                targetWord: await getRandomWord(),
-                players: {}, // Store Players' scores
-                maxPlayers: 8,
-                timer: null,
-                playersReady: 0
-            };
+        console.log(`${username} attempting to join room ${roomId}`);
+        
+        const room = rooms[roomId];
+        if (!room) {
+            socket.emit('error', { message: 'Room does not exist or has expired' });
+            return;
         }
 
-        if (Object.keys(rooms[roomId].players).length < rooms[roomId].maxPlayers) {
-            // Add player to the room's player list with score 0
-            rooms[roomId].players[socket.id] = { username, score: 0 };
-            rooms[roomId].playersReady++;
-
-            // Join the Socket.IO room
-            socket.join(roomId);
-
-            // Notify the player of the current game state
-            socket.emit('gameState', {
-                targetWord: rooms[roomId].targetWord,
-                players: rooms[roomId].players
-            });
-
-            console.log(`${username} joined room: ${roomId}`);
-
-            // Broadcast to others in the room
-            socket.broadcast.to(roomId).emit('playerJoined', { username });
-        } else {
+        if (Object.keys(room.players).length >= room.maxPlayers) {
             socket.emit('roomFull');
             return;
         }
+
+        // Add player to room
+        room.players[socket.id] = {
+            username: username,
+            score: 0
+        };
+
+        socket.join(roomId);
+        
+        // Emit game state
+        io.to(roomId).emit('gameState', {
+            players: room.players,
+            remainingTime: ROOM_TIMEOUT - (Date.now() - room.createdAt)
+        });
+
+        socket.broadcast.to(roomId).emit('playerJoined', { username });
     });
 
     socket.on('startGame', (roomId) => {
@@ -222,17 +271,21 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log(`Player disconnected: ${socket.id}`);
         for (const roomId in rooms) {
-            if (rooms[roomId].players[socket.id]) {
-                const username = rooms[roomId].players[socket.id].username;
-                delete rooms[roomId].players[socket.id]; // Remove player from the room
+            const room = rooms[roomId];
+            if (room.players[socket.id]) {
+                const username = room.players[socket.id].username;
+                delete room.players[socket.id];
 
-                // Notify others in the room
-                io.to(roomId).emit('playerLeft', { username });
-
-                // If no players left, delete the room
-                if (Object.keys(rooms[roomId].players).length === 0) {
-                    clearTimeout(rooms[roomId].timer);
-                    delete rooms[roomId];
+                // If room is empty, clean it up
+                if (Object.keys(room.players).length === 0) {
+                    cleanupRoom(roomId);
+                } else {
+                    // Notify remaining players
+                    io.to(roomId).emit('playerLeft', { username });
+                    io.to(roomId).emit('gameState', { 
+                        players: room.players,
+                        remainingTime: ROOM_TIMEOUT - (Date.now() - room.createdAt)
+                    });
                 }
                 break;
             }
@@ -249,13 +302,18 @@ io.on('connection', (socket) => {
 app.post('/api/create-room', (req, res) => {
     let roomCode;
     do {
-        roomCode = Math.random().toString(36).substring(2, 8).toUpperCase(); // Generate a random room code
-    } while (rooms[roomCode]); // Ensure uniqueness
+        roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+    } while (rooms[roomCode]);
 
     rooms[roomCode] = {
         targetWord: null,
-        players: {} // Use an object for player data
+        players: {},
+        maxPlayers: 8,
+        createdAt: Date.now(),
+        timeout: setTimeout(() => checkRoomExpiry(roomCode), ROOM_TIMEOUT)
     };
+
+    console.log(`Room ${roomCode} created, will expire in 30 minutes`);
     res.json({ roomCode });
 });
 
@@ -269,6 +327,28 @@ app.get('/api/join-room', (req, res) => {
         res.json({ success: false });
     }
 });
+
+// Graceful shutdown handling
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+function shutdown() {
+    console.log('Received shutdown signal');
+    
+    // Notify all connected clients
+    io.emit('serverShutdown', { message: 'Server is shutting down' });
+    
+    // Clean up all rooms
+    Object.keys(rooms).forEach(roomId => {
+        cleanupRoom(roomId);
+    });
+    
+    // Close all socket connections
+    io.close(() => {
+        console.log('All socket connections closed');
+        process.exit(0);
+    });
+}
 
 
 server.listen(port, () => {

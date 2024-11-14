@@ -6,6 +6,7 @@
     <title>Wordle Unlimited</title>
     <link rel="icon" href="../src/assets/images/frame-grid-icon.png">
     <link rel="stylesheet" href="styles/style.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script type="module" src="scripts/index.js" defer></script>
     <audio id="keyboard-sound" src="assets/sound/Keyboard_Sound.mp3"></audio>
 </head>
@@ -296,7 +297,6 @@
             </div>
         </div>
 
-        <!-- Replace your current multiplayer dropdown with this -->
         <div id="multiplayer-modal" class="hidden">
             <div class="modal-content">
                 <button type="button" class="close" aria-label="Close">&times;</button>
@@ -309,8 +309,9 @@
                                id="room-code-input" 
                                placeholder="Enter Room Code" 
                                maxlength="6"
-                               pattern="[A-Z0-9]{6}"
-                               title="6 character room code">
+                               pattern="[0-9]{6}"
+                               title="6 digit room code"
+                               autocomplete="off">
                         <div class="button-group">
                             <button id="join-room-btn" class="primary-btn">Join Room</button>
                             <button id="create-room-btn" class="primary-btn">Create Room</button>
@@ -318,10 +319,27 @@
                     </div>
                 </div>
         
+                <!-- Name Input Section -->
+                <div id="name-input-modal" class="hidden">
+                    <div class="name-input-content">
+                        <h3>Enter Your Name</h3>
+                        <input type="text" 
+                               id="player-name-input" 
+                               placeholder="Enter your name"
+                               maxlength="15">
+                        <p id="name-error" class="error-text hidden">Please enter a name or click Random</p>
+                        <div class="button-group">
+                            <button id="confirm-name-btn" class="primary-btn">Confirm</button>
+                            <button id="random-name-btn" class="primary-btn">Random Name</button>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Room Information Section -->
                 <div id="room-info" class="hidden">
                     <h3>Room Information</h3>
                     <p id="room-code-display"></p>
+                    <div id="room-timer" class="room-timer"></div>
                     <div class="player-list">
                         <h4>Players:</h4>
                         <ul id="player-list-container"></ul>

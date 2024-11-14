@@ -775,6 +775,63 @@ input[type="checkbox"]:checked::before {
     position: relative;
 }
 
+#name-input-modal {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1001;
+}
+
+.name-input-content {
+    background: var(--background-color);
+    padding: 20px;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 300px;
+    text-align: center;
+}
+
+#player-name-input {
+    width: 100%;
+    padding: 10px;
+    margin: 15px 0;
+    font-size: 1.1em;
+    background: var(--background-color);
+    color: var(--text-color);
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.room-timer {
+    text-align: center;
+    margin: 10px 0;
+    padding: 5px;
+    font-size: 0.9em;
+    color: #ff0000;
+    background-color: rgba(255, 0, 0, 0.1);
+    border-radius: 4px;
+}
+
+.error-text {
+    color: #ff0000;
+    font-size: 0.9em;
+    margin: 5px 0;
+}
+
+.name-input-content .button-group {
+    margin-top: 15px;
+}
+
+#name-input-modal.hidden {
+    display: none;
+}
+
 .join-room-section {
     display: flex;
     flex-direction: column;

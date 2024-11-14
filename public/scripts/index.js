@@ -5,6 +5,15 @@ document.addEventListener('DOMContentLoaded', async function() {
     const maxAttempts = 6;
     let targetWord;
 
+    // Initialize socket connection
+    const socket = io('http://localhost:3001', {
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
+    });
+
     // Function to get or generate the daily challenge word
     const getDailyChallengeWord = async () => {
         const savedWordData = JSON.parse(localStorage.getItem('dailyChallenge'));
@@ -874,18 +883,345 @@ document.addEventListener('DOMContentLoaded', async function() {
     const roomInfoSection = document.getElementById('room-info');
     const lobbySection = document.getElementById('lobby-section');
 
+    // Socket connection setup
+    let currentRoom = null;
+
+    // Get DOM elements
+    const nameInputModal = document.getElementById('name-input-modal');
+    const playerNameInput = document.getElementById('player-name-input');
+    const confirmNameBtn = document.getElementById('confirm-name-btn');
+    const randomNameBtn = document.getElementById('random-name-btn');
+    const nameError = document.getElementById('name-error');
+    const createRoomBtn = document.getElementById('create-room-btn');
+    const joinRoomBtn = document.getElementById('join-room-btn');
+    const roomCodeInput = document.getElementById('room-code-input');
+    const roomCodeDisplay = document.getElementById('room-code-display');
+    const playerListContainer = document.getElementById('player-list-container');
+    const startGameBtn = document.getElementById('start-game-btn');
+    const timerDisplay = document.getElementById('timer-display');
+
+    const COLOR_NAMES = ['Blue', 'Pink', 'Violet', 'Red', 'Yellow', 'Indigo', 'Orange', 'Green'];
+
+    // Create room functionality
+    createRoomBtn.addEventListener('click', async () => {
+        console.log('Create room clicked');
+        try {
+            const response = await fetch('/api/create-room', {
+                method: 'POST'
+            });
+            const data = await response.json();
+            console.log('Room created:', data);
+            
+            if (data.roomCode) {
+                currentRoom = data.roomCode;
+                // Show name input modal
+                nameInputModal.classList.remove('hidden');
+                showNameInputModal(data.roomCode);
+            }
+        } catch (error) {
+            console.error('Error creating room:', error);
+            showAlert('Failed to create room');
+        }
+    });
+
+    // Join room functionality
+    joinRoomBtn.addEventListener('click', async () => {
+        const roomCode = roomCodeInput.value.trim().toUpperCase();
+        if (!roomCode) {
+            showAlert('Please enter a room code');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/join-room?roomCode=${roomCode}`);
+            const data = await response.json();
+
+            if (data.success) {
+                // First update room display
+                lobbySection.classList.add('hidden');
+                roomInfoSection.classList.remove('hidden');
+                roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+                
+                // Then show name input
+                showNameInputModal(roomCode);
+            } else {
+                showAlert('Invalid room code');
+            }
+        } catch (error) {
+            console.error('Error joining room:', error);
+            showAlert('Failed to join room');
+        }
+    });
+
+    // Start game button
+    startGameBtn.addEventListener('click', () => {
+        if (currentRoom) {
+            socket.emit('startGame', currentRoom);
+        }
+    });
+
+    function updateRoomDisplay(roomCode) {
+        roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+    }
+    
+    socket.on('roomJoined', ({ roomId }) => {
+        updateRoomDisplay(roomId);
+    });
+
+
+    socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        showAlert('Lost connection to server. Please refresh the page.');
+    });
+
+    // Socket event handlers
+    socket.on('gameState', ({ players }) => {
+        updatePlayerList(players);
+    });
+
+    socket.on('playerJoined', ({ username }) => {
+        showAlert(`${username} joined the room`);
+    });
+
+    socket.on('playerLeft', ({ username }) => {
+        showAlert(`${username} left the room`);
+    });
+
+    socket.on('gameStarted', () => {
+        startGameTimer();
+        showAlert('Game started!');
+    });
+
+    socket.on('newWord', ({ newWord, players, winner }) => {
+        updatePlayerList(players);
+        showAlert(`${winner} guessed the word correctly!`);
+    });
+
+    socket.on('gameEnded', ({ players }) => {
+        const sortedPlayers = Object.entries(players)
+            .sort(([, a], [, b]) => b.score - a.score);
+
+        let message = 'Game Over!\n\nFinal Scores:\n';
+        sortedPlayers.forEach(([, player], index) => {
+            message += `${index + 1}. ${player.username}: ${player.score}\n`;
+        });
+
+        showAlert(message);
+        resetGame();
+    });
+
+    socket.on('roomFull', () => {
+        showAlert('Room is full!');
+    });
+
+    socket.on('connect', () => {
+        console.log('Socket connected');
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        showAlert('Connection error. Please try again.');
+    });
+    
+    socket.on('connect_timeout', () => {
+        console.error('Socket connection timeout');
+        showAlert('Connection timeout. Please try again.');
+    });
+
+    // Show name input modal
+    function showNameInputModal(roomCode) {
+        console.log('showNameInputModal called with roomCode:', roomCode);
+    
+        // Remove existing listeners
+        const confirmBtn = document.getElementById('confirm-name-btn');
+        const randomBtn = document.getElementById('random-name-btn');
+        
+        // Clear old listeners by cloning and replacing buttons
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        const newRandomBtn = randomBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        randomBtn.parentNode.replaceChild(newRandomBtn, randomBtn);
+        
+        // Add new listeners
+        newConfirmBtn.addEventListener('click', function() {
+            console.log('Confirm clicked');
+            const name = document.getElementById('player-name-input').value.trim();
+            console.log('Name entered:', name);
+
+            if (name) {
+                // Hide name input modal
+                document.getElementById('name-input-modal').classList.add('hidden');
+                // Hide lobby section (where create/join buttons are)
+                lobbySection.classList.add('hidden');
+                // Show room info section
+                roomInfoSection.classList.remove('hidden');
+                // Update room code display
+                roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+
+                socket.emit('joinRoom', {
+                    roomId: roomCode,
+                    username: name
+                });
+            } else {
+                document.getElementById('name-error').classList.remove('hidden');
+            }
+        });
+
+        newRandomBtn.addEventListener('click', function() {
+            console.log('Random clicked');
+            const randomName = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
+            document.getElementById('player-name-input').value = randomName;
+            document.getElementById('name-error').classList.add('hidden');
+        });
+    }
+
+    let roomTimer = null;
+
+    function updateRoomTimer(timeLeft) {
+        const minutes = Math.floor(timeLeft / 60000);
+        const seconds = Math.floor((timeLeft % 60000) / 1000);
+        if (!document.getElementById('room-timer')) {
+            // Create timer element if it doesn't exist
+            const timerDiv = document.createElement('div');
+            timerDiv.id = 'room-timer';
+            timerDiv.className = 'room-timer';
+            roomInfoSection.insertBefore(timerDiv, roomInfoSection.firstChild);
+        }
+        document.getElementById('room-timer').textContent = 
+            `Room expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    // Update the socket event handlers
+    socket.on('gameState', ({ players, remainingTime }) => {
+        console.log('Received game state:', players);
+        updatePlayerList(players);
+        
+        // Handle room timer
+        if (remainingTime !== undefined) {
+            if (roomTimer) clearInterval(roomTimer);
+            
+            let timeLeft = remainingTime;
+            updateRoomTimer(timeLeft);
+            
+            roomTimer = setInterval(() => {
+                timeLeft -= 1000;
+                if (timeLeft <= 0) {
+                    clearInterval(roomTimer);
+                    showAlert('Room has expired');
+                    resetGame();
+                    return;
+                }
+                updateRoomTimer(timeLeft);
+            }, 1000);
+        }
+    });
+
+    // Update player list
+    function updatePlayerList(players) {
+        console.log('Updating player list:', players);
+        playerListContainer.innerHTML = '';
+        Object.entries(players).forEach(([id, player]) => {
+            const li = document.createElement('li');
+            li.textContent = player.username;
+            li.style.padding = '8px';
+            li.style.margin = '4px 0';
+            li.style.borderRadius = '4px';
+            li.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+            playerListContainer.appendChild(li);
+        });
+    }
+
+    socket.on('roomFull', () => {
+        showAlert('Room is full! Maximum 8 players allowed.');
+        // Reset room view
+        lobbySection.classList.remove('hidden');
+        roomInfoSection.classList.add('hidden');
+    });
+
+    function startGameTimer() {
+        let timeLeft = 5 * 60; // 5 minutes in seconds
+        const timer = setInterval(() => {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timerDisplay.textContent = 
+                `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+            if (--timeLeft < 0) {
+                clearInterval(timer);
+                socket.emit('gameEnded');
+            }
+        }, 1000);
+    }
+
+    socket.on('roomExpired', () => {
+        showAlert('Room has expired');
+        if (roomTimer) clearInterval(roomTimer);
+        resetGame();
+    });
+
+    socket.on('reconnect', (attemptNumber) => {
+        console.log('Reconnected to server after', attemptNumber, 'attempts');
+    });
+    
+    socket.on('reconnect_failed', () => {
+        console.log('Failed to reconnect to server');
+        showAlert('Unable to connect to server. Please refresh the page.');
+    });
+
+    socket.on('serverShutdown', ({ message }) => {
+        console.log('Server shutdown:', message);
+        showAlert('Server is shutting down. Please refresh the page later.');
+        resetGame();
+    });
+
+    // Update reset game function
+    function resetGame() {
+        // Clear the room timer if it exists
+        if (roomTimer) {
+            clearInterval(roomTimer);
+            roomTimer = null;
+        }
+
+        // Remove timer display if it exists
+        const timerDisplay = document.getElementById('room-timer');
+        if (timerDisplay) {
+            timerDisplay.remove();
+        }
+
+        // Reset other game elements
+        lobbySection.classList.remove('hidden');
+        roomInfoSection.classList.add('hidden');
+        nameInputModal.classList.add('hidden');
+        roomCodeInput.value = '';
+        currentRoom = null;
+
+         
+        // Hide modals
+        multiplayerModal.style.display = 'none';
+        overlay.classList.add('hidden');
+    }
+
     // Show modal when clicking multiplayer icon
     multiplayerIcon.addEventListener('click', (e) => {
         e.preventDefault();
         toggleCardVisibility(multiplayerModal);
+        // Make sure name input is hidden when opening multiplayer modal
+        nameInputModal.classList.add('hidden');
     });
     
-    // Update the close button handler
     closeButtonMultiplayer.addEventListener('click', () => {
-        e.preventDefault();
         toggleCardVisibility(multiplayerModal);
+        // Reset all states
+        nameInputModal.classList.add('hidden');
+        roomInfoSection.classList.add('hidden');
+        lobbySection.classList.remove('hidden');
+        playerNameInput.value = '';
+        nameError.classList.add('hidden');
+        if (currentRoom) {
+            socket.emit('leaveRoom', { roomId: currentRoom });
+            currentRoom = null;
+        }
     });
-
 
     // Prevent modal from closing when clicking inside the modal
     const modalContent = multiplayerModal.querySelector('.modal-content');
