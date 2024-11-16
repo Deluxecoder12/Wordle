@@ -907,6 +907,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const timerDisplay = document.getElementById('timer-display');
 
     const COLOR_NAMES = ['Blue', 'Pink', 'Violet', 'Red', 'Yellow', 'Indigo', 'Orange', 'Green'];
+    const COLOR_SUFFIXES = ['Star', 'Moon', 'Sun', 'Cloud', 'Rain', 'Wind', 'Storm', 'Snow'];
 
     // Create room functionality
     createRoomBtn.addEventListener('click', async () => {
@@ -986,10 +987,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     socket.on('playerJoined', ({ username }) => {
+        currentRoomPlayers.add(username);
         showAlert(`${username} joined the room`);
     });
 
     socket.on('playerLeft', ({ username }) => {
+        currentRoomPlayers.delete(username);
         showAlert(`${username} has left the room`);
         
         // If this is the current player, reset the game state
@@ -1047,53 +1050,130 @@ document.addEventListener('DOMContentLoaded', async function() {
         const randomBtn = document.getElementById('random-name-btn');
         
         // Function to handle name confirmation
-        function handleConfirm() {
+        async function handleConfirm() {
             console.log('Confirm clicked');
             const name = playerNameInput.value.trim();
             console.log('Name entered:', name);
-    
+
             if (name) {
-                currentUsername = name; // Store username
-                // Hide modals
-                nameInputModal.classList.add('hidden');
-                lobbySection.classList.add('hidden');
-                // Show room info
-                roomInfoSection.classList.remove('hidden');
-                // Update display
-                roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
-                
-                // Join room
-                socket.emit('joinRoom', {
-                    roomId: roomCode,
-                    username: name
-                });
-                
-                // Clear input and error
-                playerNameInput.value = '';
-                nameError.classList.add('hidden');
+                try {
+                    // Show loading state
+                    confirmBtn.disabled = true;
+                    confirmBtn.textContent = 'Joining...';
+
+                    // Join room
+                    socket.emit('joinRoom', {
+                        roomId: roomCode,
+                        username: name
+                    });
+
+                    currentUsername = name; // Store username
+
+                    // Update UI
+                    nameInputModal.classList.add('hidden');
+                    lobbySection.classList.add('hidden');
+                    roomInfoSection.classList.remove('hidden');
+                    roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+
+                    // Clear input and error
+                    playerNameInput.value = '';
+                    nameError.classList.add('hidden');
+                } catch (error) {
+                    console.error('Error joining room:', error);
+                    showAlert('Failed to join room. Please try again.');
+                } finally {
+                    // Reset button state
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Confirm';
+                }
             } else {
                 nameError.classList.remove('hidden');
             }
         }
         
+        let currentRoomPlayers = new Set();
+
         // Function to handle random name generation
         function handleRandomName() {
             console.log('Random clicked');
-            const randomName = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
+            // Disable button temporarily
+            randomBtn.disabled = true;
+
+            let randomName;
+
+            // First try simple color names
+            const availableColors = COLOR_NAMES.filter(color => 
+                !currentRoomPlayers.has(color)
+            );
+        
+            if (availableColors.length > 0) {
+                // If there are available simple color names, use one
+                randomName = availableColors[Math.floor(Math.random() * availableColors.length)];
+            } else {
+                // If all simple names are taken, generate a compound name
+                let isUnique = false;
+                let attempts = 0;
+                const maxAttempts = 50; // Prevent infinite loop
+        
+                while (!isUnique && attempts < maxAttempts) {
+                    const color = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
+                    const suffix = COLOR_SUFFIXES[Math.floor(Math.random() * COLOR_SUFFIXES.length)];
+                    const compound = `${color}${suffix}`;
+                    
+                    if (!currentRoomPlayers.has(compound)) {
+                        randomName = compound;
+                        isUnique = true;
+                    }
+                    attempts++;
+                }
+        
+                // If still no unique name, add a number
+                if (!randomName) {
+                    const baseColor = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
+                    let number = 1;
+                    while (currentRoomPlayers.has(`${baseColor}${number}`)) {
+                        number++;
+                    }
+                    randomName = `${baseColor}${number}`;
+                }
+            }
+        
             playerNameInput.value = randomName;
             nameError.classList.add('hidden');
-            handleConfirm();
+
+            // Re-enable button after short delay
+            setTimeout(() => {
+                randomBtn.disabled = false;
+            }, 100);
         }
         
-        // Clear old listeners by cloning and replacing buttons
+        // Remove old event listeners and create new buttons
         const newConfirmBtn = confirmBtn.cloneNode(true);
         const newRandomBtn = randomBtn.cloneNode(true);
+
+        // Add new event listeners with debounce
+        let isProcessing = false;
+        newConfirmBtn.addEventListener('click', async () => {
+            if (!isProcessing) {
+                isProcessing = true;
+                await handleConfirm();
+                isProcessing = false;
+            }
+        });
+
+        newRandomBtn.addEventListener('click', () => {
+            if (!isProcessing) {
+                isProcessing = true;
+                handleRandomName();
+                setTimeout(() => {
+                    isProcessing = false;
+                }, 100);
+            }
+        });
+
+        // Replace old buttons
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         randomBtn.parentNode.replaceChild(newRandomBtn, randomBtn);
-        
-        // Add new listeners
-        newConfirmBtn.addEventListener('click', handleConfirm);
-        newRandomBtn.addEventListener('click', handleRandomName);
     }
 
     let roomTimer = null;
@@ -1115,7 +1195,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Update the socket event handlers
     socket.on('gameState', ({ players, remainingTime }) => {
         console.log('Received game state:', players);
-        updatePlayerList(players);
+        try {
+            updatePlayerList(players);
+            currentRoomPlayers = new Set(Object.values(players).map(player => player.username));
+        } catch (error) {
+            console.error('Error updating player list:', error);
+        }
         
         // Handle room timer
         if (remainingTime !== undefined) {
@@ -1140,15 +1225,21 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Update player list
     function updatePlayerList(players) {
         console.log('Updating player list:', players);
+        if (!playerListContainer) return;
+        
         playerListContainer.innerHTML = '';
         Object.entries(players).forEach(([id, player]) => {
-            const li = document.createElement('li');
-            li.textContent = player.username;
-            li.style.padding = '8px';
-            li.style.margin = '4px 0';
-            li.style.borderRadius = '4px';
-            li.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-            playerListContainer.appendChild(li);
+            try {
+                const li = document.createElement('li');
+                li.textContent = player.username;
+                li.style.padding = '8px';
+                li.style.margin = '4px 0';
+                li.style.borderRadius = '4px';
+                li.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                playerListContainer.appendChild(li);
+            } catch (error) {
+                console.error('Error creating player list item:', error);
+            }
         });
     }
 

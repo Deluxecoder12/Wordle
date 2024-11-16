@@ -206,6 +206,13 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // Check if username is already taken in this room
+        const existingNames = Object.values(room.players).map(player => player.username);
+        if (existingNames.includes(username)) {
+            socket.emit('error', { message: 'Username already taken in this room' });
+            return;
+        }
+
         if (Object.keys(room.players).length >= room.maxPlayers) {
             socket.emit('roomFull');
             return;
@@ -334,7 +341,7 @@ app.post('/api/create-room', (req, res) => {
     rooms[roomCode] = {
         targetWord: null,
         players: {},
-        maxPlayers: 8,
+        maxPlayers: 3,
         createdAt: Date.now(),
         timeout: setTimeout(() => checkRoomExpiry(roomCode), ROOM_TIMEOUT)
     };
@@ -357,22 +364,38 @@ app.get('/api/join-room', (req, res) => {
 // Graceful shutdown handling
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+process.once('SIGUSR2', () => {
+    shutdown(() => {
+        process.kill(process.pid, 'SIGUSR2');
+    });
+});
 
-function shutdown() {
+function shutdown(callback) {
     console.log('Received shutdown signal');
-    
+
     // Notify all connected clients
     io.emit('serverShutdown', { message: 'Server is shutting down' });
-    
+
     // Clean up all rooms
     Object.keys(rooms).forEach(roomId => {
         cleanupRoom(roomId);
     });
-    
+
+    // Add a timeout to force shutdown if cleanup takes too long
+    const shutdownTimeout = setTimeout(() => {
+        console.log('Forcing shutdown after timeout');
+        process.exit(1);
+    }, 5000); // 5 seconds timeout
+
     // Close all socket connections
-    io.close(() => {
-        console.log('All socket connections closed');
-        process.exit(0);
+    io.close((err) => {
+        clearTimeout(shutdownTimeout); // Clear the timeout once cleanup is done
+        if (err) {
+            console.error('Error closing socket connections', err);
+        } else {
+            console.log('All socket connections closed');
+            if (callback) callback(); // Call the provided callback if any
+        }
     });
 }
 
