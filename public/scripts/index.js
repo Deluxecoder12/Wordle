@@ -656,6 +656,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     overlay.addEventListener('click', closeAllModals);
 
     function closeAllModals() {
+        console.log('Closing all modals, currentRoom:', currentRoom);
         // Close instruction card
         if (instructionCard.classList.contains('visible')) {
             toggleCardVisibility(instructionCard);
@@ -667,9 +668,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Close multiplayer modal
         if (multiplayerModal.classList.contains('visible')) {
             if (currentRoom) {
-                if (confirm('Are you sure you want to leave the room? Your progress will be lost.')) {
-                    leaveRoom();
-                }
+                showLeaveConfirmation();
                 return;
             }
             toggleCardVisibility(multiplayerModal);
@@ -944,19 +943,25 @@ document.addEventListener('DOMContentLoaded', async function() {
             showAlert('Please enter a room code');
             return;
         }
-
+    
         try {
             const response = await fetch(`/api/join-room?roomCode=${roomCode}`);
             const data = await response.json();
-
+    
             if (data.success) {
-                // First update room display
-                lobbySection.classList.add('hidden');
-                roomInfoSection.classList.remove('hidden');
-                roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+                currentRoom = roomCode; // Store room code
                 
-                // Then show name input
+                // Hide the join/create buttons and show name input
+                lobbySection.classList.add('hidden');
+                
+                // Show name input modal
                 showNameInputModal(roomCode);
+    
+                // Update room info display for consistency
+                const roomCodeDisplay = document.getElementById('room-code-display');
+                if (roomCodeDisplay) {
+                    roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+                }
             } else {
                 showAlert('Invalid room code');
             }
@@ -1002,9 +1007,33 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
-    socket.on('gameStarted', () => {
+    socket.on('gameStarted', (data) => {
+        console.log('Game started!', data);
+        gameInProgress = true;
+        
+        // Show game elements
+        const gameGrid = document.getElementById('game-grid');
+        const leaderboard = document.getElementById('leaderboard');
+        const startButton = document.getElementById('start-game-btn');
+    
+        if (gameGrid) gameGrid.classList.remove('hidden');
+        if (leaderboard) leaderboard.classList.remove('hidden');
+        if (startButton) startButton.classList.add('hidden');
+    
         startGameTimer();
-        showAlert('Game started!');
+        showAlert('Game started! Good luck!');
+    });
+    
+    socket.on('wordGuessed', ({ username, word, attempts }) => {
+        // Update leaderboard when someone guesses correctly
+        socket.emit('updateScore', {
+            roomId: currentRoom,
+            attempts: attempts
+        });
+    });
+    
+    socket.on('scoreUpdate', ({ players }) => {
+        updateLeaderboard(players);
     });
 
     socket.on('newWord', ({ newWord, players, winner }) => {
@@ -1043,6 +1072,54 @@ document.addEventListener('DOMContentLoaded', async function() {
         showAlert('Connection timeout. Please try again.');
     });
 
+    function handleSuccessfulJoin(roomCode, username) {
+        // Hide all modals
+        const multiplayerModal = document.getElementById('multiplayer-modal');
+        const nameInputModal = document.getElementById('name-input-modal');
+        const lobbySection = document.getElementById('lobby-section');
+        const roomInfoSection = document.getElementById('room-info');
+    
+        // Hide modals
+        if (multiplayerModal) multiplayerModal.classList.add('hidden');
+        if (nameInputModal) nameInputModal.classList.add('hidden');
+        if (lobbySection) lobbySection.classList.add('hidden');
+        
+        // Show room info
+        if (roomInfoSection) {
+            roomInfoSection.classList.remove('hidden');
+            // Update room code display
+            const roomCodeDisplay = document.getElementById('room-code-display');
+            if (roomCodeDisplay) {
+                roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+            }
+        }
+
+        socket.emit('getRoomState', roomCode, (response) => {
+            if (response.success) {
+                const players = response.players;
+                // Show start button only for the first player (room creator)
+                const startButton = document.getElementById('start-game-btn');
+                if (startButton) {
+                    if (Object.keys(players).length === 1 && players[socket.id]) {
+                        startButton.classList.remove('hidden');
+                        // Remove any existing event listeners
+                        startButton.replaceWith(startButton.cloneNode(true));
+                        // Add new event listener
+                        document.getElementById('start-game-btn').addEventListener('click', () => startGame(roomCode));
+                    } else {
+                        startButton.classList.add('hidden');
+                    }
+                }
+            }
+        });
+    
+        // Clear any input fields
+        const nameInput = document.getElementById('player-name-input');
+        const roomCodeInput = document.getElementById('room-code-input');
+        if (nameInput) nameInput.value = '';
+        if (roomCodeInput) roomCodeInput.value = '';
+    }
+
     // Show name input modal
     function showNameInputModal(roomCode) {
         console.log('showNameInputModal called with roomCode:', roomCode);
@@ -1052,6 +1129,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         const nameInput = document.getElementById('player-name-input');
         let originalValue = '';
         let isProcessing = false;
+
+        nameInputModal.classList.remove('hidden');
         
         // Add input event listener to store original value
         nameInput.addEventListener('input', (e) => {
@@ -1072,100 +1151,67 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Function to handle name confirmation
         async function handleConfirm() {
             if (isProcessing) return;
-            console.log('Confirm clicked');
             const name = nameInput.value.trim();
-            console.log('Name entered:', name);
-
-            if (name) {
-                isProcessing = true;
-                try {
-                    // Show loading state
-                    confirmBtn.disabled = true;
-                    confirmBtn.textContent = 'Joining...';
-
-                    // Create a Promise to handle the socket response
-                    const joinResult = await new Promise((resolve, reject) => {
-                        // Set a timeout for the socket response
-                        const timeout = setTimeout(() => {
-                            cleanup();
-                            reject(new Error('Join room timeout'));
-                        }, 10000);
-    
-                        function cleanup() {
-                            clearTimeout(timeout);
-                            socket.off('joinSuccess');
-                            socket.off('joinError');
-                            socket.off('roomFull');
-                        }
-    
-                        // Listen for success
-                        socket.once('joinSuccess', () => {
-                            cleanup();
-                            resolve(true);
-                        });
-    
-                        // Listen for error
-                        socket.once('joinError', (error) => {
-                            cleanup();
-                            reject(new Error(error.message || 'Failed to join room'));
-                        });
-    
-                        // Listen for room full
-                        socket.once('roomFull', () => {
-                            cleanup();
-                            reject(new Error('Room is full'));
-                        });
-    
-                        // Emit join room event
-                        socket.emit('joinRoom', {
-                            roomId: roomCode,
-                            username: name
-                        });
-                    });
-
-                    // If we get here, the join was successful
-                    currentUsername = name;
-                    currentRoom = roomCode;
-
-                    // Update UI
-                    nameInputModal.classList.add('hidden');
-                    const lobbySection = document.getElementById('lobby-section');
-                    const roomInfoSection = document.getElementById('room-info');
-
-                    if (lobbySection) lobbySection.classList.add('hidden');
-                    if (roomInfoSection) {
-                        roomInfoSection.classList.remove('hidden');
-
-                        // Update room code display
-                        const roomCodeDisplay = document.getElementById('room-code-display');
-                        if (roomCodeDisplay) {
-                            roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
-                        }
-
-                        // Initialize room timer
-                        const initialTime = 30 * 60 * 1000; // 30 minutes
-                        updateRoomTimer(initialTime);
-                    }
-
-                    // Clear input and error states
-                    nameInput.value = '';
-                    const nameError = document.getElementById('name-error');
-                    if (nameError) nameError.classList.add('hidden');
-
-                } catch (error) {
-                    console.error('Error joining room:', error);
-                    showAlert(error.message || 'Failed to join room. Please try again.');
-                    nameInput.value = name;
-                    nameInput.focus();
-                } finally {
-                    // Reset button state
-                    isProcessing = false;
-                    confirmBtn.disabled = false;
-                    confirmBtn.textContent = 'Confirm';
-                }
-            } else {
+            if (!name) {
                 const nameError = document.getElementById('name-error');
                 if (nameError) nameError.classList.remove('hidden');
+                return;
+            }
+
+            isProcessing = true;
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Joining...';
+
+            try {
+                // Create a Promise to handle the socket response
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        cleanup();
+                        reject(new Error('Join room timeout'));
+                    }, 10000);
+
+                    function cleanup() {
+                        clearTimeout(timeout);
+                        socket.off('joinSuccess');
+                        socket.off('joinError');
+                        socket.off('roomFull');
+                    }
+
+                    socket.once('joinSuccess', () => {
+                        cleanup();
+                        resolve(true);
+                    });
+
+                    socket.once('joinError', (error) => {
+                        cleanup();
+                        reject(new Error(error.message || 'Failed to join room'));
+                    });
+
+                    socket.once('roomFull', () => {
+                        cleanup();
+                        reject(new Error('Room is full'));
+                    });
+
+                    socket.emit('joinRoom', {
+                        roomId: roomCode,
+                        username: name
+                    });
+                });
+
+                // If we get here, join was successful
+                currentUsername = name;
+
+                // Use the new handler for successful join
+                handleSuccessfulJoin(roomCode, name);
+
+            } catch (error) {
+                console.error('Error joining room:', error);
+                showAlert(error.message || 'Failed to join room. Please try again.');
+                nameInput.focus();
+            } finally {
+                isProcessing = false;
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirm';
             }
         }
         
@@ -1180,52 +1226,52 @@ document.addEventListener('DOMContentLoaded', async function() {
             randomBtn.disabled = true;
             let randomName;
     
-            const availableColors = COLOR_NAMES.filter(color => 
-                !currentRoomPlayers.has(color)
-            );
-        
-            if (availableColors.length > 0) {
-                randomName = availableColors[Math.floor(Math.random() * availableColors.length)];
-            } else {
-                let isUnique = false;
-                let attempts = 0;
-                const maxAttempts = 50;
-        
-                while (!isUnique && attempts < maxAttempts) {
-                    const color = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
-                    const suffix = COLOR_SUFFIXES[Math.floor(Math.random() * COLOR_SUFFIXES.length)];
-                    const compound = `${color}${suffix}`;
-                    
-                    if (!currentRoomPlayers.has(compound)) {
-                        randomName = compound;
-                        isUnique = true;
-                    }
-                    attempts++;
-                }
-        
-                if (!randomName) {
-                    const baseColor = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
-                    let number = 1;
-                    while (currentRoomPlayers.has(`${baseColor}${number}`)) {
-                        number++;
-                    }
-                    randomName = `${baseColor}${number}`;
-                }
-            }
-        
-            nameInput.value = randomName;
-            nameInput.focus();
-
-            const nameError = document.getElementById('name-error');
-            if (nameError) nameError.classList.add('hidden');
+            socket.emit('getRoomPlayers', roomCode, (response) => {
+                const existingNames = response.players.map(player => player.username);
+                currentRoomPlayers = new Set(existingNames);
+                
+                const availableColors = COLOR_NAMES.filter(color => 
+                    !currentRoomPlayers.has(color)
+                );
             
-            // Enable confirm button with random name
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm';
-    
-            setTimeout(() => {
-                randomBtn.disabled = false;
-            }, 100);
+                if (availableColors.length > 0) {
+                    randomName = availableColors[Math.floor(Math.random() * availableColors.length)];
+                } else {
+                    // Generate compound name
+                    let isUnique = false;
+                    let attempts = 0;
+                    const maxAttempts = 50;
+            
+                    while (!isUnique && attempts < maxAttempts) {
+                        const color = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
+                        const suffix = COLOR_SUFFIXES[Math.floor(Math.random() * COLOR_SUFFIXES.length)];
+                        const compound = `${color}${suffix}`;
+                        
+                        if (!currentRoomPlayers.has(compound)) {
+                            randomName = compound;
+                            isUnique = true;
+                        }
+                        attempts++;
+                    }
+            
+                    if (!randomName) {
+                        const baseColor = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
+                        let number = 1;
+                        while (currentRoomPlayers.has(`${baseColor}${number}`)) {
+                            number++;
+                        }
+                        randomName = `${baseColor}${number}`;
+                    }
+                }
+                
+                nameInput.value = randomName;
+                nameInput.focus();
+                confirmBtn.disabled = false;
+                
+                setTimeout(() => {
+                    randomBtn.disabled = false;
+                }, 100);
+            });
         }
     
         // Remove old event listeners and create new buttons
@@ -1252,6 +1298,39 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     let roomTimer = null;
+
+    let gameInProgress = false;
+    let gameTimer = null;
+    const GAME_DURATION = 5 * 60 * 1000; // 5 minutes
+
+    // Function to update leaderboard
+    function updateLeaderboard(players) {
+        const leaderboard = document.getElementById('leaderboard-content');
+        if (!leaderboard) return;
+
+        // Sort players by score (correct guesses)
+        const sortedPlayers = Object.values(players)
+            .sort((a, b) => {
+                // First by correct guesses
+                if (b.correctGuesses !== a.correctGuesses) {
+                    return b.correctGuesses - a.correctGuesses;
+                }
+                // Then by average attempts (lower is better)
+                return (a.totalAttempts / a.correctGuesses || Infinity) - 
+                       (b.totalAttempts / b.correctGuesses || Infinity);
+            });
+
+        leaderboard.innerHTML = sortedPlayers.map((player, index) => `
+            <div class="leaderboard-item">
+                <span class="rank">#${index + 1}</span>
+                <span class="name">${player.username}</span>
+                <span class="score">
+                    ${player.correctGuesses || 0} correct
+                    (${player.totalAttempts || 0} attempts)
+                </span>
+            </div>
+        `).join('');
+    }
 
     function updateRoomTimer(timeLeft) {
         const minutes = Math.floor(timeLeft / 60000);
@@ -1336,16 +1415,27 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     function startGameTimer() {
-        let timeLeft = 5 * 60; // 5 minutes in seconds
-        const timer = setInterval(() => {
-            const minutes = Math.floor(timeLeft / 60);
-            const seconds = timeLeft % 60;
-            timerDisplay.textContent = 
-                `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        const timerDisplay = document.getElementById('game-timer');
+        let timeLeft = GAME_DURATION;
 
-            if (--timeLeft < 0) {
-                clearInterval(timer);
-                socket.emit('gameEnded');
+        // Show game elements
+        document.getElementById('game-grid').classList.remove('hidden');
+        document.getElementById('leaderboard').classList.remove('hidden');
+        document.getElementById('start-game-btn').classList.add('hidden');
+
+        gameTimer = setInterval(() => {
+            timeLeft -= 1000;
+            const minutes = Math.floor(timeLeft / 60000);
+            const seconds = Math.floor((timeLeft % 60000) / 1000);
+
+            if (timerDisplay) {
+                timerDisplay.textContent = 
+                    `Game Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(gameTimer);
+                endGame();
             }
         }, 1000);
     }
@@ -1371,8 +1461,103 @@ document.addEventListener('DOMContentLoaded', async function() {
         resetGame();
     });
 
-    // Get the leave room button
+    // Function to handle game start
+    function startGame(roomCode) {
+        if (!roomCode) {
+            console.error('No room code provided');
+            return;
+        }
+    
+        console.log('Attempting to start game for room:', roomCode);
+        socket.emit('startGame', roomCode);
+    }
+
+    function endGame() {
+        gameInProgress = false;
+        clearInterval(gameTimer);
+        
+        // Show final results
+        showAlert('Game Over! Final scores are displayed in the leaderboard.');
+        
+        // Disable input
+        const gameGrid = document.getElementById('game-grid');
+        if (gameGrid) {
+            gameGrid.classList.add('disabled');
+        }
+    }
+
     const leaveRoomBtn = document.getElementById('leave-room-btn');
+    const leaveModal = document.getElementById('leave-confirmation-modal');
+    const confirmLeaveBtn = document.getElementById('confirm-leave');
+    const cancelLeaveBtn = document.getElementById('cancel-leave');
+
+    function showLeaveConfirmation() {
+        console.log('Showing leave confirmation'); // Debug log
+        if (!leaveModal) {
+            console.error('Leave modal not found');
+            return;
+        }
+
+        leaveModal.classList.remove('hidden');
+
+        const cleanup = () => {
+            // Remove all event listeners when hiding the modal
+            confirmLeaveBtn.removeEventListener('click', handleConfirm);
+            cancelLeaveBtn.removeEventListener('click', handleCancel);
+            document.removeEventListener('keydown', handleKeyPress);
+        };
+
+        const handleConfirm = () => {
+            leaveRoom();
+            hideLeaveConfirmation();
+            cleanup();
+        };
+    
+        const handleCancel = () => {
+            hideLeaveConfirmation();
+            cleanup();
+        };
+    
+        // Handle keyboard events
+        const handleKeyPress = (e) => {
+            if (e.key === 'Escape') {
+                handleCancel();
+            } else if (e.key === 'Enter' && document.activeElement === confirmBtn) {
+                handleConfirm();
+            }
+        };
+    
+        // Add event listeners
+        confirmLeaveBtn.addEventListener('click', handleConfirm);
+        cancelLeaveBtn.addEventListener('click', handleCancel);
+        document.addEventListener('keydown', handleKeyPress);
+        // Focus on cancel button by default (safer option)
+        cancelLeaveBtn.focus();
+    }
+
+    function hideLeaveConfirmation() {
+        console.log('Hiding leave confirmation'); // Debug log
+        if (leaveModal) {
+            leaveModal.classList.add('hidden');
+        }
+    }
+
+    // Get the leave room button
+    document.getElementById('leave-room-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        showLeaveConfirmation();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (!leaveModal.classList.contains('hidden')) {
+            if (e.key === 'Escape') {
+                hideLeaveConfirmation();
+            } else if (e.key === 'Enter' && document.activeElement === confirmLeaveBtn) {
+                leaveRoom();
+                hideLeaveConfirmation();
+            }
+        }
+    });
 
     // Function to handle leaving room
     function leaveRoom() {
@@ -1380,16 +1565,52 @@ document.addEventListener('DOMContentLoaded', async function() {
             // Notify server
             socket.emit('leaveRoom', { 
                 roomId: currentRoom, 
-                username: currentUsername // Make sure to store username when joining
+                username: currentUsername
             });
-
+    
+            // Hide confirmation modal
+            hideLeaveConfirmation();
+    
             // Reset local state
             resetGame();
 
+            // Hide the multiplayer modal
+            toggleCardVisibility(multiplayerModal);
+    
             // Show confirmation
             showAlert('You have left the room');
         }
     }
+
+    function setupModalKeyboardSupport() {
+        const modal = document.getElementById('leave-confirmation-modal');
+        const confirmBtn = document.getElementById('confirm-leave');
+        const cancelBtn = document.getElementById('cancel-leave');
+    
+        // Keep track of which button is focused
+        let currentFocus = confirmBtn;
+    
+        modal.addEventListener('keydown', (e) => {
+            if (modal.classList.contains('hidden')) return;
+    
+            switch (e.key) {
+                case 'Tab':
+                    e.preventDefault();
+                    currentFocus = currentFocus === confirmBtn ? cancelBtn : confirmBtn;
+                    currentFocus.focus();
+                    break;
+                case 'Enter':
+                    currentFocus.click();
+                    break;
+                case 'Escape':
+                    hideLeaveConfirmation();
+                    break;
+            }
+        });
+    }
+    
+    // Call this when the page loads
+    setupModalKeyboardSupport();
 
     // Update reset game function
     function resetGame() {
@@ -1403,13 +1624,28 @@ document.addEventListener('DOMContentLoaded', async function() {
             roomTimer = null;
         }
 
-        // Reset UI
-        nameInputModal.classList.add('hidden');
-        roomInfoSection.classList.add('hidden');
-        lobbySection.classList.remove('hidden');
-        playerNameInput.value = '';
-        roomCodeInput.value = '';
-        playerListContainer.innerHTML = '';
+        const nameInputModal = document.getElementById('name-input-modal');
+        const multiplayerModal = document.getElementById('multiplayer-modal');
+        const roomInfoSection = document.getElementById('room-info');
+        const lobbySection = document.getElementById('lobby-section');
+
+        // Hide modals
+        if (nameInputModal) nameInputModal.classList.add('hidden');
+        if (multiplayerModal) multiplayerModal.classList.add('hidden');
+        if (roomInfoSection) roomInfoSection.classList.add('hidden');
+        
+        // Show lobby
+        if (lobbySection) lobbySection.classList.remove('hidden');
+
+        // Clear inputs
+        const nameInput = document.getElementById('player-name-input');
+        const roomCodeInput = document.getElementById('room-code-input');
+        if (nameInput) nameInput.value = '';
+        if (roomCodeInput) roomCodeInput.value = '';
+
+        // Clear player list
+        const playerListContainer = document.querySelector('.player-list');
+        if (playerListContainer) playerListContainer.innerHTML = '';
 
         // Remove timer display if it exists
         const timerDisplay = document.getElementById('room-timer');
@@ -1418,12 +1654,26 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    leaveRoomBtn.addEventListener('click', () => {
-        // Show confirmation dialog
-        if (confirm('Are you sure you want to leave the room? Your progress will be lost.')) {
+    if (leaveRoomBtn) {
+        leaveRoomBtn.addEventListener('click', (e) => {
+            console.log('Leave room button clicked'); // Debug log
+            e.preventDefault();
+            showLeaveConfirmation();
+        });
+    }
+
+    if (confirmLeaveBtn) {
+        confirmLeaveBtn.addEventListener('click', () => {
             leaveRoom();
-        }
-    });
+            hideLeaveConfirmation();
+        });
+    }
+
+    if (cancelLeaveBtn) {
+        cancelLeaveBtn.addEventListener('click', () => {
+            hideLeaveConfirmation();
+        });
+    }
 
     // Show modal when clicking multiplayer icon
     multiplayerIcon.addEventListener('click', (e) => {
@@ -1434,12 +1684,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
     
     closeButtonMultiplayer.addEventListener('click', () => {
-        
+        console.log('Close button clicked, currentRoom:', currentRoom);
         nameError.classList.add('hidden');
         if (currentRoom) {
-            if (confirm('Are you sure you want to leave the room? Your progress will be lost.')) {
-                leaveRoom();
-            }
+            showLeaveConfirmation();
             return;
         }
         toggleCardVisibility(multiplayerModal);
@@ -1447,7 +1695,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         nameInputModal.classList.add('hidden');
         roomInfoSection.classList.add('hidden');
         lobbySection.classList.remove('hidden');
-        playerNameInput.value = '';
+        if (playerNameInput) playerNameInput.value = '';
     });
 
     // Prevent modal from closing when clicking inside the modal

@@ -338,17 +338,40 @@
                 
                 <!-- Room Information Section -->
                 <div id="room-info" class="hidden">
-                    <h3>Room Information</h3>
-                    <p id="room-code-display"></p>
                     <div id="room-timer" class="room-timer"></div>
-                    <div class="player-list">
-                        <h4>Players:</h4>
-                        <ul id="player-list-container"></ul>
+                    <div class="flex justify-between">
+                        <div class="game-area flex-grow">
+                            <div class="room-header">
+                                <div id="room-code-display"></div>
+                            </div>
+                            <div id="player-list" class="player-list"></div>
+                            
+                            <!-- Game grid will be shown here when game starts -->
+                            <div id="game-grid" class="hidden">
+                                <!-- Wordle grid here -->
+                            </div>
+                        </div>
+                        
+                        <div id="leaderboard" class="leaderboard hidden">
+                            <h3>Leaderboard</h3>
+                            <div id="leaderboard-content"></div>
+                        </div>
                     </div>
+                    <!-- Game control buttons -->
                     <div class="game-controls">
-                        <button id="start-game-btn" class="primary-btn hidden">Start Game</button>
-                        <div id="game-timer" class="hidden">Time: <span id="timer-display">5:00</span></div>
-                        <button id="leave-room-btn" class="danger-btn">Leave Room</button>
+                        <button id="start-game-btn" class="game-btn primary-btn hidden">Start Game</button>
+                        <button id="leave-room-btn" class="game-btn danger-btn">Leave Room</button>
+                    </div>
+                </div>
+
+                <div id="leave-confirmation-modal" class="modal hidden">
+                    <div class="modal-content leave-confirmation">
+                        <h2>Leave Room</h2>
+                        <p>Are you sure you want to leave the room? Your progress will be lost.</p>
+                        <div class="modal-buttons">
+                            <button id="confirm-leave" class="modal-btn confirm-btn">Yes, Leave</button>
+                            <button id="cancel-leave" class="modal-btn cancel-btn">Cancel</button>
+                        </div>
                     </div>
                 </div>
             </div>

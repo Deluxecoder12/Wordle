@@ -840,6 +840,7 @@ input[type="checkbox"]:checked::before {
     flex-direction: column;
     gap: 10px;
     margin-top: 20px;
+    width: 100%;
 }
 
 .error-text {
@@ -867,6 +868,26 @@ input[type="checkbox"]:checked::before {
 .create-room-section {
     margin-top: 5px;
     text-align: center;
+}
+
+#room-code-display {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.leaderboard {
+    width: 25%;
+    padding: 15px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    margin-left: 20px;
+}
+
+.leaderboard h3 {
+    text-align: center;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    font-weight: bold;
 }
 
 #room-code-input {
@@ -920,13 +941,6 @@ input[type="checkbox"]:checked::before {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-#game-timer {
-    font-size: 1.2em;
-    font-weight: bold;
-    text-align: center;
-    margin: 10px 0;
-}
-
 .close {
     position: absolute;
     right: 0px;
@@ -940,6 +954,222 @@ input[type="checkbox"]:checked::before {
 .hidden {
     display: none;
 }
+
+.game-area {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    width: 70%;
+}
+
+.game-btn {
+    width: 100%;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 5px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+.game-btn:active {
+    transform: translateY(1px);
+}
+
+.leaderboard {
+    width: 25%;
+    padding: 15px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    margin-left: 20px;
+}
+
+.leaderboard h3 {
+    text-align: center;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.leaderboard-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 4px 0;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.leaderboard-item .rank {
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.start-btn {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    margin: 10px 0;
+    transition: background-color 0.3s;
+}
+
+.start-btn:hover {
+    background-color: #45a049;
+}
+
+.start-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.game-timer {
+    text-align: center;
+    font-size: 1.2em;
+    margin: 10px 0;
+    color: #ff0000;
+}
+
+@keyframes buttonHover {
+    0% {
+        transform: translateY(0);
+    }
+    100% {
+        transform: translateY(-2px);
+    }
+}
+
+.game-btn:hover {
+    transform: translateY(-1px);
+    animation: buttonHover 0.2s ease-in-out forwards;
+}
+
+.modal-content.leave-confirmation {
+    position: relative;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    padding: 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 10001;
+    margin: auto; /* Center the modal */
+}
+
+.leave-confirmation h2 {
+    font-size: 1.5em;
+    margin-bottom: 20px;
+    color: #ff0000;
+}
+
+.leave-confirmation p {
+    margin-bottom: 25px;
+    line-height: 1.5;
+}
+
+#leave-confirmation-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+#leave-confirmation-modal.hidden {
+    display: none !important;
+}
+
+#leave-confirmation-modal.visible {
+    display: flex;
+}
+
+#leave-confirmation-modal::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+}
+
+#leave-confirmation-modal .modal-content {
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.modal-btn {
+    padding: 12px 25px;
+    border: none;
+    border-radius: 5px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.confirm-btn {
+    background-color: #ff0000;
+    color: white;
+}
+
+.confirm-btn:hover {
+    background-color: #cc0000;
+}
+
+.cancel-btn {
+    background-color: #444;
+    color: white;
+}
+
+.cancel-btn:hover {
+    background-color: #666;
+}
+
+.modal-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--text-color);
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-content {
+    animation: modalFadeIn 0.3s ease-out;
+}
+
 /* Adjust styles for screens smaller than 768px
 @media (max-width: 768px) {
     .guess-cell {

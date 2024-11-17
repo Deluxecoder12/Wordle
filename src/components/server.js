@@ -299,25 +299,59 @@ io.on('connection', (socket) => {
         console.log('Socket connected successfully');
     });
 
-    socket.on('startGame', (roomId) => {
+    socket.on('startGame', async (roomId) => {
+        console.log(`Attempting to start game in room ${roomId}`);
         const room = rooms[roomId];
         if (!room) {
-            socket.emit('joinError', { message: 'Room not found' });
+            console.log('Room not found');
+            socket.emit('error', { message: 'Room not found' });
             return;
         }
-
-        if (!room.players[socket.id]) {
-            socket.emit('joinError', { message: 'You are not in this room' });
+    
+        // Verify sender is the room creator
+        if (!room.players[socket.id] || Object.keys(room.players)[0] !== socket.id) {
+            console.log('Unauthorized start game attempt');
+            socket.emit('error', { message: 'Not authorized to start game' });
             return;
         }
-
-        // Check if all players are ready to start the game
-        if (Object.keys(room.players).length >= room.maxPlayers) {
-            startGameTimer(roomId);
-            io.to(roomId).emit('gameStarted');
-        } else {
-            socket.emit('notEnoughPlayers');
+    
+        try {
+            // Generate a new word for the room
+            room.targetWord = await getRandomWord();
+            room.gameStartTime = Date.now();
+            room.gameInProgress = true;
+            
+            // Initialize player scores
+            Object.keys(room.players).forEach(playerId => {
+                room.players[playerId].correctGuesses = 0;
+                room.players[playerId].totalAttempts = 0;
+            });
+    
+            console.log(`Game started in room ${roomId} with word: ${room.targetWord}`);
+    
+            // Notify all players
+            io.to(roomId).emit('gameStarted', {
+                remainingTime: GAME_DURATION
+            });
+    
+        } catch (error) {
+            console.error('Error starting game:', error);
+            socket.emit('error', { message: 'Failed to start game' });
         }
+    });
+
+    socket.on('updateScore', ({ roomId, attempts }) => {
+        const room = rooms[roomId];
+        if (!room || !room.players[socket.id]) return;
+
+        const player = room.players[socket.id];
+        player.correctGuesses = (player.correctGuesses || 0) + 1;
+        player.totalAttempts = (player.totalAttempts || 0) + attempts;
+
+        // Broadcast updated scores
+        io.to(roomId).emit('scoreUpdate', {
+            players: room.players
+        });
     });
 
     socket.on('leaveRoom', ({ roomId, username }) => {
@@ -402,6 +436,33 @@ io.on('connection', (socket) => {
                 }
                 break;
             }
+        }
+    });
+
+    socket.on('getRoomPlayers', (roomCode, callback) => {
+        const room = rooms[roomCode];
+        if (room) {
+            const players = Object.values(room.players);
+            callback({ players });
+        } else {
+            callback({ players: [] });
+        }
+    });
+
+    socket.on('getRoomState', (roomCode, callback) => {
+        const room = rooms[roomCode];
+        if (room) {
+            callback({
+                success: true,
+                players: room.players,
+                isActive: room.isActive,
+                gameInProgress: room.gameInProgress || false
+            });
+        } else {
+            callback({
+                success: false,
+                message: 'Room not found'
+            });
         }
     });
 
