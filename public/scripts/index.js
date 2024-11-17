@@ -7,13 +7,18 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     let currentUsername = null;
 
+    const socketURL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:3001' 
+    : 'https://wordle-unlimited.onrender.com'; 
+
     // Initialize socket connection
-    const socket = io('http://localhost:3001', {
+    const socket = io(socketURL, {
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        timeout: 20000
+        timeout: 20000,
+        transports: ['websocket', 'polling']
     });
 
     // Function to get or generate the daily challenge word
