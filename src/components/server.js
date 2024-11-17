@@ -127,7 +127,8 @@ app.get('/api/validate-word', async (req, res) => {
 });
 
 // Constants for room management
-const ROOM_TIMEOUT = 30 * 60 * 1000; // 10 minutes in milliseconds
+const INITIAL_ROOM_TIMEOUT = 5 * 60 * 1000;  // 5 minutes for initial joining
+const ACTIVE_ROOM_TIMEOUT = 30 * 60 * 1000; // 10 minutes in milliseconds
 const EMPTY_ROOM_CLEANUP_INTERVAL = 30 * 1000; // Check for empty rooms every 30 seconds
 
 // Function to check room expiry
@@ -137,12 +138,17 @@ function checkRoomExpiry(roomId) {
 
     const now = Date.now();
     const roomAge = now - room.createdAt;
+    const hasPlayers = Object.keys(room.players).length > 0;
+    
+    // Different timeout based on whether room has players
+    const timeoutToUse = hasPlayers ? ACTIVE_ROOM_TIMEOUT : INITIAL_ROOM_TIMEOUT;
 
-    if (roomAge >= ROOM_TIMEOUT) {
-        // Room expired
-        console.log(`Room ${roomId} expired after 10 minutes`);
-        // Notify all players in the room
-        io.to(roomId).emit('roomExpired');
+    if (roomAge >= timeoutToUse) {
+        console.log(`Room ${roomId} expired after ${timeoutToUse/1000/60} minutes`);
+        // Notify all players in the room if there are any
+        if (hasPlayers) {
+            io.to(roomId).emit('roomExpired');
+        }
         // Clean up room
         cleanupRoom(roomId);
     }
@@ -155,19 +161,41 @@ function cleanupRoom(roomId) {
         if (rooms[roomId].timeout) {
             clearTimeout(rooms[roomId].timeout);
         }
+        
+        // Notify any remaining players before removing the room
+        const hasPlayers = Object.keys(rooms[roomId].players).length > 0;
+        if (hasPlayers) {
+            io.to(roomId).emit('roomExpired');
+        }
+        
         // Remove room
         delete rooms[roomId];
-        console.log(`Room ${roomId} cleaned up`);
+        console.log(`Room ${roomId} cleaned up at ${new Date().toLocaleTimeString()}`);
     }
 }
 
-// Setup room cleanup interval
 setInterval(() => {
+    const now = Date.now();
+    
     for (const roomId in rooms) {
         const room = rooms[roomId];
-        // Check if room is empty
-        if (Object.keys(room.players).length === 0) {
-            console.log(`Cleaning up empty room ${roomId}`);
+        const roomAge = now - room.createdAt;
+        const isEmpty = Object.keys(room.players).length === 0;
+        
+        // Check if room should be cleaned up
+        if (isEmpty) {
+            if (room.isActive) {
+                // Room was active but now empty
+                console.log(`Cleaning up abandoned room ${roomId}`);
+                cleanupRoom(roomId);
+            } else if (roomAge >= INITIAL_ROOM_TIMEOUT) {
+                // Inactive room that exceeded initial timeout
+                console.log(`Cleaning up unused room ${roomId} after ${Math.floor(roomAge/1000/60)} minutes`);
+                cleanupRoom(roomId);
+            }
+        } else if (roomAge >= ACTIVE_ROOM_TIMEOUT) {
+            // Active room that exceeded maximum time limit
+            console.log(`Cleaning up expired active room ${roomId} after ${Math.floor(roomAge/1000/60)} minutes`);
             cleanupRoom(roomId);
         }
     }
@@ -218,34 +246,77 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // Add player to room
-        room.players[socket.id] = {
-            username: username,
-            score: 0
-        };
+        try {
+            // Clear the initial timeout when first player joins
+            if (!room.isActive && Object.keys(room.players).length === 0) {
+                room.isActive = true;
+                clearTimeout(room.timeout);
+                room.timeout = setTimeout(() => checkRoomExpiry(roomId), ACTIVE_ROOM_TIMEOUT);
+                console.log(`Room ${roomId} activated, new expiry set to ${ACTIVE_ROOM_TIMEOUT/1000/60} minutes`);
+            }
 
-        socket.join(roomId);
-        
-        // Emit game state
-        io.to(roomId).emit('gameState', {
-            players: room.players,
-            remainingTime: ROOM_TIMEOUT - (Date.now() - room.createdAt)
-        });
+            // Add player to room
+            room.players[socket.id] = {
+                username: username,
+                score: 0
+            };
 
-        socket.broadcast.to(roomId).emit('playerJoined', { username });
+            // Join the socket room
+            await socket.join(roomId);
+            
+            // Emit success first
+            socket.emit('joinSuccess');
+            
+            // Then emit game state to everyone
+            io.to(roomId).emit('gameState', {
+                players: room.players,
+                remainingTime: room.isActive ? 
+                    ACTIVE_ROOM_TIMEOUT - (Date.now() - room.createdAt) :
+                    INITIAL_ROOM_TIMEOUT - (Date.now() - room.createdAt)
+            });
+
+            // Notify others
+            socket.broadcast.to(roomId).emit('playerJoined', { username });
+            
+            console.log(`${username} successfully joined room ${roomId}`);
+        } catch (error) {
+            console.error('Error in room join:', error);
+            // Remove player if they were added
+            if (room.players[socket.id]) {
+                delete room.players[socket.id];
+            }
+            socket.emit('joinError', { message: 'Failed to join room' });
+        }
+    });
+
+    // Add socket connection error handling
+    socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        showAlert('Connection error. Please check your internet connection.');
+    });
+
+    socket.on('connect', () => {
+        console.log('Socket connected successfully');
     });
 
     socket.on('startGame', (roomId) => {
         const room = rooms[roomId];
-        if (room) {
-            // Check if all players are ready to start the game
-            if (Object.keys(room.players).length === room.maxPlayers) {
-                startGameTimer(roomId);
-                io.to(roomId).emit('gameStarted');
-            } else {
-                // Notify the player that the game hasn't started yet
-                socket.emit('notEnoughPlayers');
-            }
+        if (!room) {
+            socket.emit('joinError', { message: 'Room not found' });
+            return;
+        }
+
+        if (!room.players[socket.id]) {
+            socket.emit('joinError', { message: 'You are not in this room' });
+            return;
+        }
+
+        // Check if all players are ready to start the game
+        if (Object.keys(room.players).length >= room.maxPlayers) {
+            startGameTimer(roomId);
+            io.to(roomId).emit('gameStarted');
+        } else {
+            socket.emit('notEnoughPlayers');
         }
     });
 
@@ -254,16 +325,24 @@ io.on('connection', (socket) => {
             // Remove player from room
             delete rooms[roomId].players[socket.id];
 
-            // Notify other players
-            socket.broadcast.to(roomId).emit('playerLeft', { username });
+            // If room is empty, mark as inactive
+            if (Object.keys(rooms[roomId].players).length === 0) {
+                rooms[roomId].isActive = false;
+                console.log(`Room ${roomId} deactivated due to all players leaving`);
+            }
 
             // Leave the Socket.IO room
             socket.leave(roomId);
 
-            // Update game state for remaining players
+            // Notify other players
+            socket.broadcast.to(roomId).emit('playerLeft', { username });
+
+            // Update game state for remaining players with correct timeout
             io.to(roomId).emit('gameState', {
                 players: rooms[roomId].players,
-                remainingTime: ROOM_TIMEOUT - (Date.now() - rooms[roomId].createdAt)
+                remainingTime: rooms[roomId].isActive ? 
+                    ACTIVE_ROOM_TIMEOUT - (Date.now() - rooms[roomId].createdAt) :
+                    INITIAL_ROOM_TIMEOUT - (Date.now() - rooms[roomId].createdAt)
             });
 
             // If room is empty, clean it up
@@ -309,15 +388,16 @@ io.on('connection', (socket) => {
                 const username = room.players[socket.id].username;
                 delete room.players[socket.id];
 
-                // If room is empty, clean it up
+                // If room is empty, mark as inactive and clean up
                 if (Object.keys(room.players).length === 0) {
+                    room.isActive = false;
                     cleanupRoom(roomId);
                 } else {
                     // Notify remaining players
                     io.to(roomId).emit('playerLeft', { username });
-                    io.to(roomId).emit('gameState', { 
+                    io.to(roomId).emit('gameState', {
                         players: room.players,
-                        remainingTime: ROOM_TIMEOUT - (Date.now() - room.createdAt)
+                        remainingTime: ACTIVE_ROOM_TIMEOUT - (Date.now() - room.createdAt)
                     });
                 }
                 break;
@@ -343,10 +423,11 @@ app.post('/api/create-room', (req, res) => {
         players: {},
         maxPlayers: 3,
         createdAt: Date.now(),
-        timeout: setTimeout(() => checkRoomExpiry(roomCode), ROOM_TIMEOUT)
+        timeout: setTimeout(() => checkRoomExpiry(roomCode), INITIAL_ROOM_TIMEOUT),
+        isActive: false
     };
 
-    console.log(`Room ${roomCode} created, will expire in 30 minutes`);
+    console.log(`Room ${roomCode} created, will expire in ${INITIAL_ROOM_TIMEOUT/1000/60} minutes if unused.`);
     res.json({ roomCode });
 });
 

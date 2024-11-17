@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     let targetWord;
 
     let currentUsername = null;
+    let currentRoomPlayers = new Set();
 
     const socketURL = window.location.hostname === 'localhost' 
     ? 'http://localhost:3001' 
@@ -986,11 +987,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         showAlert('Lost connection to server. Please refresh the page.');
     });
 
-    // Socket event handlers
-    socket.on('gameState', ({ players }) => {
-        updatePlayerList(players);
-    });
-
     socket.on('playerJoined', ({ username }) => {
         currentRoomPlayers.add(username);
         showAlert(`${username} joined the room`);
@@ -1050,75 +1046,150 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Show name input modal
     function showNameInputModal(roomCode) {
         console.log('showNameInputModal called with roomCode:', roomCode);
-        
+    
         const confirmBtn = document.getElementById('confirm-name-btn');
         const randomBtn = document.getElementById('random-name-btn');
+        const nameInput = document.getElementById('player-name-input');
+        let originalValue = '';
+        let isProcessing = false;
         
+        // Add input event listener to store original value
+        nameInput.addEventListener('input', (e) => {
+            originalValue = e.target.value;
+            // Enable confirm button whenever there's input
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Confirm';
+        });
+
+        // Add keyboard event listener for Enter key
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !isProcessing) {
+                e.preventDefault();
+                handleConfirm();
+            }
+        });
+
         // Function to handle name confirmation
         async function handleConfirm() {
+            if (isProcessing) return;
             console.log('Confirm clicked');
-            const name = playerNameInput.value.trim();
+            const name = nameInput.value.trim();
             console.log('Name entered:', name);
 
             if (name) {
+                isProcessing = true;
                 try {
                     // Show loading state
                     confirmBtn.disabled = true;
                     confirmBtn.textContent = 'Joining...';
 
-                    // Join room
-                    socket.emit('joinRoom', {
-                        roomId: roomCode,
-                        username: name
+                    // Create a Promise to handle the socket response
+                    const joinResult = await new Promise((resolve, reject) => {
+                        // Set a timeout for the socket response
+                        const timeout = setTimeout(() => {
+                            cleanup();
+                            reject(new Error('Join room timeout'));
+                        }, 10000);
+    
+                        function cleanup() {
+                            clearTimeout(timeout);
+                            socket.off('joinSuccess');
+                            socket.off('joinError');
+                            socket.off('roomFull');
+                        }
+    
+                        // Listen for success
+                        socket.once('joinSuccess', () => {
+                            cleanup();
+                            resolve(true);
+                        });
+    
+                        // Listen for error
+                        socket.once('joinError', (error) => {
+                            cleanup();
+                            reject(new Error(error.message || 'Failed to join room'));
+                        });
+    
+                        // Listen for room full
+                        socket.once('roomFull', () => {
+                            cleanup();
+                            reject(new Error('Room is full'));
+                        });
+    
+                        // Emit join room event
+                        socket.emit('joinRoom', {
+                            roomId: roomCode,
+                            username: name
+                        });
                     });
 
-                    currentUsername = name; // Store username
+                    // If we get here, the join was successful
+                    currentUsername = name;
+                    currentRoom = roomCode;
 
                     // Update UI
                     nameInputModal.classList.add('hidden');
-                    lobbySection.classList.add('hidden');
-                    roomInfoSection.classList.remove('hidden');
-                    roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+                    const lobbySection = document.getElementById('lobby-section');
+                    const roomInfoSection = document.getElementById('room-info');
 
-                    // Clear input and error
-                    playerNameInput.value = '';
-                    nameError.classList.add('hidden');
+                    if (lobbySection) lobbySection.classList.add('hidden');
+                    if (roomInfoSection) {
+                        roomInfoSection.classList.remove('hidden');
+
+                        // Update room code display
+                        const roomCodeDisplay = document.getElementById('room-code-display');
+                        if (roomCodeDisplay) {
+                            roomCodeDisplay.textContent = `Room Code: ${roomCode}`;
+                        }
+
+                        // Initialize room timer
+                        const initialTime = 30 * 60 * 1000; // 30 minutes
+                        updateRoomTimer(initialTime);
+                    }
+
+                    // Clear input and error states
+                    nameInput.value = '';
+                    const nameError = document.getElementById('name-error');
+                    if (nameError) nameError.classList.add('hidden');
+
                 } catch (error) {
                     console.error('Error joining room:', error);
-                    showAlert('Failed to join room. Please try again.');
+                    showAlert(error.message || 'Failed to join room. Please try again.');
+                    nameInput.value = name;
+                    nameInput.focus();
                 } finally {
                     // Reset button state
+                    isProcessing = false;
                     confirmBtn.disabled = false;
                     confirmBtn.textContent = 'Confirm';
                 }
             } else {
-                nameError.classList.remove('hidden');
+                const nameError = document.getElementById('name-error');
+                if (nameError) nameError.classList.remove('hidden');
             }
         }
         
-        let currentRoomPlayers = new Set();
-
         // Function to handle random name generation
         function handleRandomName() {
             console.log('Random clicked');
-            // Disable button temporarily
+            // Store current input value if it exists
+            if (nameInput.value.trim()) {
+                originalValue = nameInput.value;
+            }
+            
             randomBtn.disabled = true;
-
             let randomName;
-
-            // First try simple color names
+    
             const availableColors = COLOR_NAMES.filter(color => 
                 !currentRoomPlayers.has(color)
             );
         
             if (availableColors.length > 0) {
-                // If there are available simple color names, use one
                 randomName = availableColors[Math.floor(Math.random() * availableColors.length)];
             } else {
-                // If all simple names are taken, generate a compound name
                 let isUnique = false;
                 let attempts = 0;
-                const maxAttempts = 50; // Prevent infinite loop
+                const maxAttempts = 50;
         
                 while (!isUnique && attempts < maxAttempts) {
                     const color = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
@@ -1132,7 +1203,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                     attempts++;
                 }
         
-                // If still no unique name, add a number
                 if (!randomName) {
                     const baseColor = COLOR_NAMES[Math.floor(Math.random() * COLOR_NAMES.length)];
                     let number = 1;
@@ -1143,29 +1213,27 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             }
         
-            playerNameInput.value = randomName;
-            nameError.classList.add('hidden');
+            nameInput.value = randomName;
+            nameInput.focus();
 
-            // Re-enable button after short delay
+            const nameError = document.getElementById('name-error');
+            if (nameError) nameError.classList.add('hidden');
+            
+            // Enable confirm button with random name
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Confirm';
+    
             setTimeout(() => {
                 randomBtn.disabled = false;
             }, 100);
         }
-        
+    
         // Remove old event listeners and create new buttons
         const newConfirmBtn = confirmBtn.cloneNode(true);
         const newRandomBtn = randomBtn.cloneNode(true);
-
-        // Add new event listeners with debounce
-        let isProcessing = false;
-        newConfirmBtn.addEventListener('click', async () => {
-            if (!isProcessing) {
-                isProcessing = true;
-                await handleConfirm();
-                isProcessing = false;
-            }
-        });
-
+    
+        newConfirmBtn.addEventListener('click', handleConfirm);
+    
         newRandomBtn.addEventListener('click', () => {
             if (!isProcessing) {
                 isProcessing = true;
@@ -1175,10 +1243,12 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }, 100);
             }
         });
-
+    
         // Replace old buttons
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         randomBtn.parentNode.replaceChild(newRandomBtn, randomBtn);
+
+        nameInput.focus();
     }
 
     let roomTimer = null;
@@ -1186,15 +1256,18 @@ document.addEventListener('DOMContentLoaded', async function() {
     function updateRoomTimer(timeLeft) {
         const minutes = Math.floor(timeLeft / 60000);
         const seconds = Math.floor((timeLeft % 60000) / 1000);
-        if (!document.getElementById('room-timer')) {
-            // Create timer element if it doesn't exist
-            const timerDiv = document.createElement('div');
-            timerDiv.id = 'room-timer';
-            timerDiv.className = 'room-timer';
+        
+        const timerDiv = document.getElementById('room-timer') || document.createElement('div');
+        timerDiv.id = 'room-timer';
+        timerDiv.className = 'room-timer';
+        timerDiv.textContent = `Room expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        const roomInfoSection = document.getElementById('room-info');
+        if (roomInfoSection && !document.getElementById('room-timer')) {
             roomInfoSection.insertBefore(timerDiv, roomInfoSection.firstChild);
         }
-        document.getElementById('room-timer').textContent = 
-            `Room expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        return timerDiv;
     }
 
     // Update the socket event handlers
@@ -1230,21 +1303,28 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Update player list
     function updatePlayerList(players) {
         console.log('Updating player list:', players);
+        const playerListContainer = document.querySelector('.player-list');
         if (!playerListContainer) return;
         
-        playerListContainer.innerHTML = '';
-        Object.entries(players).forEach(([id, player]) => {
-            try {
-                const li = document.createElement('li');
-                li.textContent = player.username;
-                li.style.padding = '8px';
-                li.style.margin = '4px 0';
-                li.style.borderRadius = '4px';
-                li.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                playerListContainer.appendChild(li);
-            } catch (error) {
-                console.error('Error creating player list item:', error);
-            }
+        // Create or get the list element
+        let ul = playerListContainer.querySelector('ul');
+        if (!ul) {
+            ul = document.createElement('ul');
+            playerListContainer.appendChild(ul);
+        }
+        
+        // Clear existing list items
+        ul.innerHTML = '';
+        
+        // Add players to the list
+        Object.values(players).forEach(player => {
+            const li = document.createElement('li');
+            li.textContent = player.username;
+            li.style.padding = '8px';
+            li.style.margin = '4px 0';
+            li.style.borderRadius = '4px';
+            li.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+            ul.appendChild(li);
         });
     }
 
