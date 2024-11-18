@@ -977,12 +977,43 @@ input[type="checkbox"]:checked::before {
     transform: translateY(1px);
 }
 
+.game-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 20px;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.game-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+#start-game-btn:not([disabled]) {
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+#start-game-btn:not([disabled]):hover {
+    background-color: #45a049;
+}
+
+#start-game-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
 .leaderboard {
-    width: 25%;
-    padding: 15px;
     background-color: rgba(255, 255, 255, 0.1);
+    padding: 20px;
     border-radius: 8px;
-    margin-left: 20px;
+    height: fit-content;
 }
 
 .leaderboard h3 {
@@ -995,8 +1026,8 @@ input[type="checkbox"]:checked::before {
 .leaderboard-item {
     display: flex;
     justify-content: space-between;
-    padding: 8px;
-    margin: 4px 0;
+    padding: 10px;
+    margin: 5px 0;
     background-color: rgba(255, 255, 255, 0.05);
     border-radius: 4px;
 }
@@ -1004,6 +1035,7 @@ input[type="checkbox"]:checked::before {
 .leaderboard-item .rank {
     font-weight: bold;
     margin-right: 10px;
+    color: #ff0000;
 }
 
 .start-btn {
@@ -1168,6 +1200,43 @@ input[type="checkbox"]:checked::before {
 
 .modal-content {
     animation: modalFadeIn 0.3s ease-out;
+}
+
+.game-container {
+    display: grid;
+    grid-template-columns: 200px 1fr 300px;
+    gap: 20px;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    margin-top: 20px;
+}
+
+.player-score {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 8px;
+    position: sticky;
+    top: 20px;
+}
+
+.player-score h3 {
+    margin-bottom: 10px;
+    font-size: 1.2em;
+    text-align: center;
+}
+
+.leaderboard {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 8px;
+    position: sticky;
+    top: 20px;
+}
+
+/* For the game grid and keyboard */
+.word-guess {
+    justify-self: center;
 }
 
 /* Adjust styles for screens smaller than 768px

@@ -264,16 +264,32 @@ io.on('connection', (socket) => {
             // Join the socket room
             await socket.join(roomId);
             
-            // Emit success first
-            socket.emit('joinSuccess');
-            
-            // Then emit game state to everyone
+            // First emit join success
+            socket.emit('joinSuccess', {
+                roomId,
+                username,
+                gameInProgress: room.gameInProgress,
+                currentWord: room.gameInProgress ? room.currentWord : null
+            });
+
+            // Then emit game state to all players
             io.to(roomId).emit('gameState', {
                 players: room.players,
                 remainingTime: room.isActive ? 
                     ACTIVE_ROOM_TIMEOUT - (Date.now() - room.createdAt) :
-                    INITIAL_ROOM_TIMEOUT - (Date.now() - room.createdAt)
+                    INITIAL_ROOM_TIMEOUT - (Date.now() - room.createdAt),
+                gameInProgress: room.gameInProgress
             });
+
+            // If game is in progress, immediately send gameStarted to new player
+            if (room.gameInProgress) {
+                console.log(`Sending game state to new player ${username}`);
+                socket.emit('gameStarted', {
+                    word: room.currentWord,
+                    timeLimit: 5 * 60 * 1000, // 5 minutes
+                    gameAlreadyStarted: true
+                });
+            }
 
             // Notify others
             socket.broadcast.to(roomId).emit('playerJoined', { username });
@@ -309,34 +325,45 @@ io.on('connection', (socket) => {
         }
     
         // Verify sender is the room creator
-        if (!room.players[socket.id] || Object.keys(room.players)[0] !== socket.id) {
-            console.log('Unauthorized start game attempt');
-            socket.emit('error', { message: 'Not authorized to start game' });
+        const isCreator = Object.keys(room.players)[0] === socket.id;
+        if (!isCreator) {
+            socket.emit('error', { message: 'Only room creator can start the game' });
             return;
         }
     
         try {
-            // Generate a new word for the room
-            room.targetWord = await getRandomWord();
+            // Use the existing /api/word endpoint to get a word
+            const response = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch word');
+            }
+            
+            const data = await response.json();
+            const newWord = data.word.toUpperCase();
+            console.log(`Generated word for room ${roomId}: ${newWord}`); // Debug log
+    
+            room.currentWord = newWord;
             room.gameStartTime = Date.now();
             room.gameInProgress = true;
-            
-            // Initialize player scores
+    
+            // Initialize game state for all players
             Object.keys(room.players).forEach(playerId => {
                 room.players[playerId].correctGuesses = 0;
                 room.players[playerId].totalAttempts = 0;
+                room.players[playerId].currentAttempts = 0;
             });
     
-            console.log(`Game started in room ${roomId} with word: ${room.targetWord}`);
+            console.log(`Game started in room ${roomId} with word: ${newWord}`);
     
-            // Notify all players
+            // Notify all players in the room
             io.to(roomId).emit('gameStarted', {
-                remainingTime: GAME_DURATION
+                word: newWord,
+                timeLimit: 5 * 60 * 1000 // 5 minutes in milliseconds
             });
     
         } catch (error) {
             console.error('Error starting game:', error);
-            socket.emit('error', { message: 'Failed to start game' });
+            socket.emit('error', { message: 'Failed to start game. Please try again.' });
         }
     });
 
@@ -390,26 +417,99 @@ io.on('connection', (socket) => {
 
     // Handle player's word guess
     socket.on('guessWord', async ({ roomId, guessedWord }) => {
+        console.log('Received guess:', { roomId, guessedWord });
+
+        // Validate input
+        if (!roomId || !guessedWord) {
+            console.log('Invalid input:', { roomId, guessedWord });
+            return;
+        }
+
         const room = rooms[roomId];
-        if (!room) return; // Exit if room doesn't exist
+        if (!room || !room.gameInProgress) {
+            console.log('Room not found or game not in progress');
+            return;
+        }
 
-        const targetWord = room.targetWord;
+        const player = room.players[socket.id];
+        if (!player) {
+            console.log('Player not found');
+            return;
+        }
 
-        if (guessedWord === targetWord) {
-            // Player guessed correctly
-            room.players[socket.id].score += 1; // Increment player's score
-            const newWord = await getRandomWord(); // Get new target word
-            room.targetWord = newWord; // Update room's target word
+        try {
+            // Validate the word using the existing endpoint
+            const response = await fetch(
+                `http://localhost:${process.env.PORT || 3001}/api/validate-word?word=${guessedWord}`
+            );
+            
+            if (!response.ok) {
+                socket.emit('error', { message: 'Error validating word' });
+                return;
+            }
+    
+            const data = await response.json();
+            if (!data.isValid && guessedWord.toLowerCase() === room.currentWord.toLowerCase()) {
+                socket.emit('error', { message: 'Invalid word' });
+                return;
+            }
+    
+            player.totalAttempts = (player.totalAttempts || 0) + 1;
+            player.currentAttempts = (player.currentAttempts || 0) + 1;
+    
+        } catch (error) {
+            console.error('Error handling guess:', error);
+            socket.emit('error', { message: 'Error processing guess' });
+        }
+    });
 
-            // Broadcast new game state to all players in the room
-            io.to(roomId).emit('newWord', {
-                newWord,
-                players: room.players,
-                winner: room.players[socket.id].username
+    socket.on('wordGuessed', async ({ roomId, word, attempts }) => {
+        console.log('Word guessed correctly:', { roomId, word, attempts });
+
+        if (!roomId || !word) {
+            console.log('Invalid wordGuessed input');
+            return;
+        }
+
+        const room = rooms[roomId];
+        if (!room || !room.players[socket.id]) {
+            console.log('Room or player not found');
+            return;
+        }
+
+        const player = room.players[socket.id];
+        player.correctGuesses = (player.correctGuesses || 0) + 1;
+        player.totalAttempts = (player.totalAttempts || 0) + attempts;
+
+        try {
+            // Generate new word
+            const newWordResponse = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
+            if (!newWordResponse.ok) {
+                throw new Error('Failed to fetch new word');
+            }
+
+            const newWordData = await newWordResponse.json();
+            room.currentWord = newWordData.word.toUpperCase();
+
+            // Notify all players
+            io.to(roomId).emit('newWord', { 
+                word: room.currentWord 
             });
-        } else {
-            // Notify the player their guess is incorrect
-            socket.emit('incorrectGuess', { guessedWord });
+
+            // Update scores
+            io.to(roomId).emit('updateScores', {
+                players: room.players
+            });
+
+            // Notify others about the successful guess
+            socket.broadcast.to(roomId).emit('playerGuessedWord', {
+                username: player.username,
+                score: player.correctGuesses
+            });
+
+        } catch (error) {
+            console.error('Error handling word guessed:', error);
+            socket.emit('error', { message: 'Error processing correct guess' });
         }
     });
 
