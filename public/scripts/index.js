@@ -1069,6 +1069,11 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         resetGrid();
 
+        const playerList = document.querySelectorAll('.player-list li');
+        playerList.forEach(li => {
+            li.classList.remove('player-ready');
+        });
+
         // Get all necessary UI elements
         const multiplayerModal = document.getElementById('multiplayer-modal');
         const roomInfo = document.getElementById('room-info');
@@ -1370,6 +1375,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         const nameInputModal = document.getElementById('name-input-modal');
         const lobbySection = document.getElementById('lobby-section');
         const roomInfoSection = document.getElementById('room-info');
+        const gameControls = roomInfoSection?.querySelector('.game-controls');
     
         // Hide modals
         if (multiplayerModal) multiplayerModal.classList.add('hidden');
@@ -1391,17 +1397,41 @@ document.addEventListener('DOMContentLoaded', async function() {
                 const players = response.players;
                 const startButton = document.getElementById('start-game-btn');
                 
-                // Show start button only for the first player (room creator)
-                if (startButton) {
-                    // Get array of player IDs and check if current socket is first player
-                    const playerIds = Object.keys(players);
-                    const isCreator = playerIds[0] === socket.id;
-                    
-                    if (isCreator && !response.gameInProgress) {
-                        startButton.classList.remove('hidden');
-                        startButton.addEventListener('click', () => startGame(roomCode));
-                    } else {
-                        startButton.classList.add('hidden');
+                // Determine if current player is admin
+                const isAdmin = Object.values(players)[0]?.username === username;
+                isRoomCreator = isAdmin; // Set global variable
+
+                // Handle game control buttons
+                if (gameControls) {
+                    const startButton = document.getElementById('start-game-btn');
+                    const readyButton = document.getElementById('ready-btn');
+
+                    // Remove existing buttons if any
+                    if (startButton) startButton.remove();
+                    if (readyButton) readyButton.remove();
+
+                    if (isAdmin && !response.gameInProgress) {
+                        // Create start button for admin
+                        const newStartButton = document.createElement('button');
+                        newStartButton.id = 'start-game-btn';
+                        newStartButton.className = 'game-btn primary-btn';
+                        newStartButton.textContent = 'Start Game';
+                        newStartButton.disabled = false;
+                        newStartButton.addEventListener('click', () => startGame(roomCode));
+                        gameControls.insertBefore(newStartButton, gameControls.firstChild);
+                    } else if (!isAdmin && !response.gameInProgress) {
+                        // Create ready button for non-admin players
+                        const newReadyButton = document.createElement('button');
+                        newReadyButton.id = 'ready-btn';
+                        newReadyButton.className = 'game-btn primary-btn';
+                        newReadyButton.textContent = 'Ready';
+                        newReadyButton.addEventListener('click', () => {
+                            socket.emit('playerReady', { roomId: roomCode });
+                            newReadyButton.disabled = true;
+                            newReadyButton.textContent = 'Ready ✓';
+                        });
+                        gameControls.insertBefore(newReadyButton, gameControls.querySelector('.danger-btn')); // Insert before Leave Room button
+                        console.log('Ready button created for player');
                     }
                 }
             }
@@ -1429,6 +1459,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Add input event listener to store original value
         nameInput.addEventListener('input', (e) => {
             originalValue = e.target.value;
+            originalValue = originalValue.replace(/👑/g, ''); // Remove crown emoji
+            if (originalValue.length > 10) {
+                originalValue = originalValue.slice(0, 10);
+            }
+            e.target.value = originalValue;
             // Enable confirm button whenever there's input
             confirmBtn.disabled = false;
             confirmBtn.textContent = 'Confirm';
@@ -1682,6 +1717,32 @@ document.addEventListener('DOMContentLoaded', async function() {
             leaderboard.classList.remove('hidden');
             updateLeaderboard(players, gameInProgress); // Pass gameInProgress flag
         }
+
+        const readyButton = document.getElementById('ready-btn');
+        const startButton = document.getElementById('start-game-btn');
+        const currentPlayer = Object.values(players).find(p => p.username === currentUsername);
+
+        if (currentPlayer) {
+            if (currentPlayer.isAdmin) {
+                if (startButton) {
+                    const allPlayersReady = Object.values(players)
+                        .filter(p => !p.isAdmin)
+                        .every(p => p.isReady);
+                    
+                    startButton.disabled = !allPlayersReady;
+                    if (allPlayersReady) {
+                        startButton.classList.add('all-ready');
+                    } else {
+                        startButton.classList.remove('all-ready');
+                    }
+                }
+            } else if (readyButton) {
+                readyButton.disabled = currentPlayer.isReady;
+                if (currentPlayer.isReady) {
+                    readyButton.textContent = 'Ready ✓';
+                }
+            }
+        }
     });
 
     function showFinalLeaderboard(roomExpired = false) {
@@ -1770,42 +1831,38 @@ document.addEventListener('DOMContentLoaded', async function() {
                 multiplayerModal.classList.add('visible');
                 roomInfo.classList.remove('hidden');
     
-                // Make sure we have game controls
-                let startButton = document.getElementById('start-game-btn');
-                if (!startButton && gameControls) {
-                    // Create button if it doesn't exist
-                    startButton = document.createElement('button');
-                    startButton.id = 'start-game-btn';
-                    startButton.className = 'game-btn primary-btn';
-                    gameControls.insertBefore(startButton, gameControls.firstChild);
-                }
-    
-                if (startButton) {
-                    // Check if current user is room creator
-                    console.log('Is creator check:', { 
-                        isRoomCreator, 
-                        currentId: socket.id, 
-                        firstPlayer: Object.keys(currentRoomPlayers)[0] 
-                    });
-    
+                if (gameControls) {
+                    // Remove any existing control buttons first
+                    const existingStartButton = document.getElementById('start-game-btn');
+                    const existingReadyButton = document.getElementById('ready-btn');
+                    if (existingStartButton) existingStartButton.remove();
+                    if (existingReadyButton) existingReadyButton.remove();
+        
                     if (isRoomCreator && !roomExpired) {
+                        // Create Start New Game button for admin
+                        const startButton = document.createElement('button');
+                        startButton.id = 'start-game-btn';
                         startButton.textContent = 'Start New Game';
-                        startButton.disabled = false;
-                        startButton.classList.remove('hidden');
-                        
-                        // Remove old event listeners
-                        const newButton = startButton.cloneNode(true);
-                        startButton.parentNode.replaceChild(newButton, startButton);
-                        
-                        // Add new click handler
-                        newButton.addEventListener('click', () => {
+                        startButton.className = 'game-btn primary-btn';
+                        startButton.disabled = true; // Disabled until all players ready
+                        startButton.addEventListener('click', () => {
                             socket.emit('startGame', currentRoom);
                         });
-    
-                        console.log('Start button set up for creator');
-                    } else {
-                        startButton.classList.add('hidden');
-                        console.log('Start button hidden for non-creator');
+                        gameControls.insertBefore(startButton, gameControls.firstChild);
+                        console.log('Start button set up for admin');
+                    } else if (!roomExpired) {
+                        // Create Ready button for players
+                        const readyButton = document.createElement('button');
+                        readyButton.id = 'ready-btn';
+                        readyButton.textContent = 'Ready';
+                        readyButton.className = 'game-btn primary-btn';
+                        readyButton.addEventListener('click', () => {
+                            socket.emit('playerReady', { roomId: currentRoom });
+                            readyButton.disabled = true;
+                            readyButton.textContent = 'Ready ✓';
+                        });
+                        gameControls.insertBefore(readyButton, gameControls.querySelector('.danger-btn'));
+                        console.log('Ready button set up for player');
                     }
                 }
             }
@@ -1876,16 +1933,37 @@ document.addEventListener('DOMContentLoaded', async function() {
             const ul = document.createElement('ul');
             Object.values(players).forEach(player => {
                 const li = document.createElement('li');
-                li.textContent = player.username;
                 li.style.padding = '8px';
                 li.style.margin = '4px 0';
                 li.style.borderRadius = '4px';
                 li.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                
+                // Add ready status class if player is ready
+                if (player.isReady) {
+                    li.classList.add('player-ready');
+                }
+                
+                // Add player name and status
+                li.innerHTML = `
+                    ${player.username}
+                    ${player.isAdmin ? ' 👑' : ''}
+                    ${player.isReady ? ' <span class="ready-check">✓</span>' : ''}
+                `;
+                
                 ul.appendChild(li);
             });
             playerListContainer.innerHTML = '';
             playerListContainer.appendChild(ul);
-            console.log('Updated player list:', Object.values(players).map(p => p.username));
+            console.log('Updated player list:', Object.values(players).map(p => ({
+                username: p.username,
+                isAdmin: p.isAdmin,
+                isReady: p.isReady
+            })));
+
+            // Log ready status for non-admin players
+            const nonAdminPlayers = Object.values(players).filter(p => !p.isAdmin);
+            const allReady = nonAdminPlayers.every(p => p.isReady);
+            console.log('All non-admin players ready:', allReady);
         }
     }
 

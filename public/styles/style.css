@@ -928,17 +928,27 @@ input[type="checkbox"]:checked::before {
 }
 
 .player-list {
-    margin: 20px 0;
+    min-width: fit-content;
+    max-width: 100%;
+    margin: 10px 0;
 }
 
 .player-list ul {
-    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     padding: 0;
 }
 
 .player-list li {
-    padding: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    padding: 8px 12px !important;
+    margin: 0 !important;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.1);
+    font-size: 1em;
+    width: fit-content;
 }
 
 .close {
@@ -1272,6 +1282,19 @@ input[type="checkbox"]:checked::before {
     top: 20px;
 }
 
+#ready-btn {
+    background-color: #FFA500;
+    transition: all 0.3s ease;
+    margin-bottom: 10px;
+    width: 100%;
+}
+
+#ready-btn:disabled {
+    background-color: #4CAF50;
+    opacity: 1;
+    cursor: not-allowed;
+}
+
 /* For the game grid and keyboard */
 .word-guess {
     display: flex;
@@ -1310,6 +1333,27 @@ input[type="checkbox"]:checked::before {
     font-size: 24px;
     cursor: pointer;
     color: var(--text-color);
+}
+
+.player-ready {
+    border-left: 4px solid #4CAF50 !important;
+}
+
+.admin-tag {
+    color: #ff9800;
+    font-style: italic;
+}
+
+.ready-check {
+    margin-left: 8px;
+    color: #4CAF50;
+    font-weight: bold;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 /* Adjust styles for screens smaller than 768px
 @media (max-width: 768px) {

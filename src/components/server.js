@@ -247,7 +247,9 @@ io.on('connection', (socket) => {
             // Add player to room
             room.players[socket.id] = {
                 username: username,
-                score: 0
+                score: 0,
+                isAdmin: Object.keys(room.players).length === 0,
+                isReady: false
             };
 
             // Join the socket room
@@ -304,6 +306,36 @@ io.on('connection', (socket) => {
         console.log('Socket connected successfully');
     });
 
+    socket.on('playerReady', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room || !room.players[socket.id]) return;
+     
+        room.players[socket.id].isReady = true;
+     
+        const adminPlayer = Object.entries(room.players)
+            .find(([, player]) => player.isAdmin);
+        
+        const nonAdminPlayers = Object.values(room.players)
+            .filter(player => !player.isAdmin);
+        const allPlayersReady = nonAdminPlayers.length > 0 && 
+            nonAdminPlayers.every(player => player.isReady);
+     
+        console.log('Ready status check:', {
+            nonAdminPlayers: nonAdminPlayers.length,
+            allReady: allPlayersReady
+        });
+     
+        // Broadcast updated game state
+        io.to(roomId).emit('gameState', { 
+            players: room.players,
+            remainingTime: room.isActive ? 
+                ACTIVE_ROOM_TIMEOUT - (Date.now() - room.createdAt) :
+                INITIAL_ROOM_TIMEOUT - (Date.now() - room.createdAt),
+            gameInProgress: room.gameInProgress,
+            allPlayersReady: allPlayersReady
+        });
+     });
+     
     socket.on('startGame', async (roomId) => {
         console.log(`Attempting to start game in room ${roomId}`);
         const room = rooms[roomId];
@@ -312,53 +344,50 @@ io.on('connection', (socket) => {
             socket.emit('error', { message: 'Room not found' });
             return;
         }
-    
-        // Verify sender is the room creator
+     
         const isCreator = Object.keys(room.players)[0] === socket.id;
         if (!isCreator) {
             socket.emit('error', { message: 'Only room creator can start the game' });
             return;
         }
-    
+     
         try {
-            // Reset all player scores first
+            // Reset scores while preserving admin status and username
+            // const playerList = document.querySelectorAll('.player-list li');
+            // playerList.forEach(li => {
+            //     li.classList.remove('player-ready');
+            // });
+
             for (let playerId in room.players) {
+                const isAdmin = room.players[playerId].isAdmin;
                 room.players[playerId] = {
                     username: room.players[playerId].username,
+                    isAdmin: isAdmin,  // Preserve admin status
+                    isReady: false,    // Reset ready status
                     correctGuesses: 0,
                     totalAttempts: 0,
                     currentAttempts: 0
                 };
             }
 
-            io.to(roomId).emit('updateScores', {
-                players: room.players,
-                newGame: true  // Add flag to indicate new game
-            });
-    
-            // Get new word
+     
+            // Get new word and start game
             const response = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch word');
-            }
+            if (!response.ok) throw new Error('Failed to fetch word');
             
             const data = await response.json();
-            const newWord = data.word.toUpperCase();
-            console.log(`Generated word for room ${roomId}: ${newWord}`);
-    
-            room.currentWord = newWord;
+            room.currentWord = data.word.toUpperCase();
             room.gameStartTime = Date.now();
             room.gameInProgress = true;
-    
-            console.log(`Game started in room ${roomId} with word: ${newWord}`);
-    
-            // Send game start info with reset player scores
+     
+            console.log(`Game started in room ${roomId} with word: ${room.currentWord}`);
+     
             io.to(roomId).emit('gameStarted', {
-                word: newWord,
-                timeLimit: 1 * 30 * 1000, // 30 seconds
-                players: room.players // Send the reset player scores
+                word: room.currentWord,
+                timeLimit: 1 * 30 * 1000,
+                players: room.players
             });
-    
+     
         } catch (error) {
             console.error('Error starting game:', error);
             socket.emit('error', { message: 'Failed to start game. Please try again.' });
