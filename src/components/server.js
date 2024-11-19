@@ -201,17 +201,6 @@ setInterval(() => {
     }
 }, EMPTY_ROOM_CLEANUP_INTERVAL);
 
-function startGameTimer(roomId) {
-    rooms[roomId].timer = setTimeout(() => {
-        // End the game and send the final scores to all players
-        const room = rooms[roomId];
-        io.to(roomId).emit('gameEnded', { players: room.players });
-
-        // Clean up the room
-        delete rooms[roomId];
-    }, 5 * 60 * 1000); // 5 minutes in milliseconds
-}
-
 io.on('connect_error', (error) => {
     console.error('Socket.IO connect error:', error);
 });
@@ -332,7 +321,22 @@ io.on('connection', (socket) => {
         }
     
         try {
-            // Use the existing /api/word endpoint to get a word
+            // Reset all player scores first
+            for (let playerId in room.players) {
+                room.players[playerId] = {
+                    username: room.players[playerId].username,
+                    correctGuesses: 0,
+                    totalAttempts: 0,
+                    currentAttempts: 0
+                };
+            }
+
+            io.to(roomId).emit('updateScores', {
+                players: room.players,
+                newGame: true  // Add flag to indicate new game
+            });
+    
+            // Get new word
             const response = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
             if (!response.ok) {
                 throw new Error('Failed to fetch word');
@@ -340,30 +344,31 @@ io.on('connection', (socket) => {
             
             const data = await response.json();
             const newWord = data.word.toUpperCase();
-            console.log(`Generated word for room ${roomId}: ${newWord}`); // Debug log
+            console.log(`Generated word for room ${roomId}: ${newWord}`);
     
             room.currentWord = newWord;
             room.gameStartTime = Date.now();
             room.gameInProgress = true;
     
-            // Initialize game state for all players
-            Object.keys(room.players).forEach(playerId => {
-                room.players[playerId].correctGuesses = 0;
-                room.players[playerId].totalAttempts = 0;
-                room.players[playerId].currentAttempts = 0;
-            });
-    
             console.log(`Game started in room ${roomId} with word: ${newWord}`);
     
-            // Notify all players in the room
+            // Send game start info with reset player scores
             io.to(roomId).emit('gameStarted', {
                 word: newWord,
-                timeLimit: 5 * 60 * 1000 // 5 minutes in milliseconds
+                timeLimit: 1 * 30 * 1000, // 30 seconds
+                players: room.players // Send the reset player scores
             });
     
         } catch (error) {
             console.error('Error starting game:', error);
             socket.emit('error', { message: 'Failed to start game. Please try again.' });
+        }
+    });
+
+    socket.on('updateGameTime', ({ roomId, timeRemaining }) => {
+        const room = rooms[roomId];
+        if (room) {
+            io.to(roomId).emit('gameTimeSync', { timeRemaining });
         }
     });
 
@@ -482,34 +487,54 @@ io.on('connection', (socket) => {
         player.totalAttempts = (player.totalAttempts || 0) + attempts;
 
         try {
-            // Generate new word
-            const newWordResponse = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
-            if (!newWordResponse.ok) {
-                throw new Error('Failed to fetch new word');
+            // Validate word
+            const response = await fetch(
+                `http://localhost:${process.env.PORT || 3001}/api/validate-word?word=${word}`
+            );
+            
+            if (!response.ok) {
+                socket.emit('error', { message: 'Error validating word' });
+                return;
             }
-
-            const newWordData = await newWordResponse.json();
-            room.currentWord = newWordData.word.toUpperCase();
-
-            // Notify all players
-            io.to(roomId).emit('newWord', { 
-                word: room.currentWord 
-            });
-
-            // Update scores
-            io.to(roomId).emit('updateScores', {
-                players: room.players
-            });
-
-            // Notify others about the successful guess
-            socket.broadcast.to(roomId).emit('playerGuessedWord', {
-                username: player.username,
-                score: player.correctGuesses
-            });
-
+    
+            // Update player stats
+            player.totalAttempts = (player.totalAttempts || 0) + attempts;
+    
+            // Check if word is correct
+            if (word.toUpperCase() === room.currentWord) {
+                // Increment correct guesses
+                player.correctGuesses = (player.correctGuesses || 0) + 1;
+                
+                // Get new word for the room
+                const newWordResponse = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
+                if (!newWordResponse.ok) {
+                    throw new Error('Failed to fetch new word');
+                }
+                
+                const newWordData = await newWordResponse.json();
+                room.currentWord = newWordData.word.toUpperCase();
+    
+                // Notify about correct guess
+                socket.broadcast.to(roomId).emit('playerGuessedWord', {
+                    username: player.username,
+                    score: player.correctGuesses
+                });
+    
+                // Send new word to all players
+                io.to(roomId).emit('newWord', { 
+                    word: room.currentWord 
+                });
+                
+                // Update everyone's scores
+                io.to(roomId).emit('updateScores', {
+                    players: room.players,
+                    gameInProgress: true
+                });
+            }
+    
         } catch (error) {
-            console.error('Error handling word guessed:', error);
-            socket.emit('error', { message: 'Error processing correct guess' });
+            console.error('Error handling guess:', error);
+            socket.emit('error', { message: 'Error processing guess' });
         }
     });
 
@@ -536,6 +561,17 @@ io.on('connection', (socket) => {
                 }
                 break;
             }
+        }
+    });
+
+    socket.on('getRoomTime', (roomId) => {
+        const room = rooms[roomId];
+        if (room) {
+            const remainingTime = room.isActive ? 
+                ACTIVE_ROOM_TIMEOUT - (Date.now() - room.createdAt) :
+                INITIAL_ROOM_TIMEOUT - (Date.now() - room.createdAt);
+            
+            socket.emit('roomTimeUpdate', { remainingTime });
         }
     });
 
@@ -567,8 +603,21 @@ io.on('connection', (socket) => {
     });
 
     // Handle game end
-    socket.on('gameEnded', () => {
-        io.to(socket.room).emit('gameEnded', { players: rooms[socket.room].players });
+    socket.on('gameEnded', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (room) {
+            room.gameInProgress = false;
+            // Clear room's game timer
+            if (room.gameTimer) {
+                clearTimeout(room.gameTimer);
+            }
+            // Notify all players in the room
+            io.to(roomId).emit('gameEnded', { 
+                players: room.players,
+                remainingTime: ACTIVE_ROOM_TIMEOUT - (Date.now() - room.createdAt),
+                isCreator: Object.keys(room.players)[0] // Send first player's ID (creator)
+            });
+        }
     });
 });
 

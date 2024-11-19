@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     let currentUsername = null;
     let currentRoomPlayers = new Set();
+    let isRoomCreator = false;
 
     const socketURL = window.location.hostname === 'localhost' 
     ? 'http://localhost:3001' 
@@ -20,6 +21,23 @@ document.addEventListener('DOMContentLoaded', async function() {
         reconnectionDelayMax: 5000,
         timeout: 20000,
         transports: ['websocket', 'polling']
+    });
+
+    window.onbeforeunload = (e) => {
+        if (currentRoom && gameInProgress) {
+            e.preventDefault();
+            return "Are you sure you want to leave the game?";
+        }
+    };
+    
+    // Handle closing/reloading with socket
+    window.addEventListener('beforeunload', () => {
+        if (currentRoom && gameInProgress) {
+            socket.emit('leaveRoom', {
+                roomId: currentRoom,
+                username: currentUsername
+            });
+        }
     });
 
     // Function to get or generate the daily challenge word
@@ -958,6 +976,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 currentRoom = data.roomCode;
                 // Show name input modal
                 nameInputModal.classList.remove('hidden');
+                isRoomCreator = true; 
                 showNameInputModal(data.roomCode);
             }
         } catch (error) {
@@ -1042,19 +1061,20 @@ document.addEventListener('DOMContentLoaded', async function() {
         showAlert(`${username} guessed their word correctly! (Score: ${score})`);
     });
 
-    socket.on('gameStarted', ({ word, timeLimit, gameAlreadyStarted }) => {
+    socket.on('gameStarted', ({ word, timeLimit, gameAlreadyStarted}) => {
         console.log('Game started event received:', { gameAlreadyStarted });
         gameInProgress = true;
         targetWord = word.toUpperCase();
         attempts = 0;
-    
+
+        resetGrid();
+
         // Get all necessary UI elements
         const multiplayerModal = document.getElementById('multiplayer-modal');
         const roomInfo = document.getElementById('room-info');
-        const roomCodeDisplay = document.getElementById('room-code-display');
-        const playerList = document.getElementById('player-list');
         const leaderboard = document.getElementById('leaderboard');
-    
+        const gameControls = roomInfo?.querySelector('.game-controls');
+
         // Keep room info visible but hide lobby sections
         const lobbySection = document.getElementById('lobby-section');
         const nameInputModal = document.getElementById('name-input-modal');
@@ -1063,10 +1083,21 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         // Ensure room info is visible
         if (roomInfo) roomInfo.classList.remove('hidden');
-        
+
+        // Move leaderboard out of modal immediately
+        if (leaderboard && leaderboard.parentElement.id === 'room-info') {
+            const gameContainer = document.querySelector('.game-container') || createGameContainer();
+            leaderboard.remove();
+            gameContainer.appendChild(leaderboard);
+            leaderboard.classList.remove('hidden');
+            // Get current players from room info and update leaderboard
+            if (roomInfo.players) {
+                updateLeaderboard(roomInfo.players, false); // true for game started
+            }
+        }
+
         let startButton = document.getElementById('start-game-btn');
         if (!startButton && gameControls) {
-            // Create button if it doesn't exist
             startButton = document.createElement('button');
             startButton.id = 'start-game-btn';
             startButton.className = 'game-btn primary-btn';
@@ -1074,12 +1105,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
 
         if (startButton) {
-            // Remove old event listeners by cloning
             const newButton = startButton.cloneNode(true);
             startButton.parentNode.replaceChild(newButton, startButton);
             startButton = newButton;
 
-            // Set button state based on game state
             startButton.classList.remove('hidden');
             if (gameAlreadyStarted) {
                 startButton.textContent = 'Continue Game';
@@ -1093,20 +1122,26 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }, 2000);
             }
 
-            // Add click handler
             startButton.addEventListener('click', setupGameUI);
         }
 
-        // Start the game timer
         startGameTimer(timeLimit || GAME_DURATION);
-
         showAlert(gameAlreadyStarted ? 
             'Game in progress! Click Continue Game to play' : 
             'Game started! Click Continue Game to play'
         );
     });
+
+    function createGameContainer() {
+    const gameContainer = document.createElement('div');
+    gameContainer.className = 'game-container';
     
-    // Update setupGameUI to properly handle the transition
+    const header = document.querySelector('header');
+    header.insertAdjacentElement('afterend', gameContainer);
+    
+    return gameContainer;
+    }
+
     function setupGameUI() {
         // Hide modal and overlay
         const multiplayerModal = document.getElementById('multiplayer-modal');
@@ -1119,18 +1154,25 @@ document.addEventListener('DOMContentLoaded', async function() {
             overlay.classList.add('hidden');
         }
     
-        // Create game layout if it doesn't exist
-        const existingLayout = document.querySelector('.game-layout');
-        const gameLayout = existingLayout || createGameLayout();
+        // Create or get game layout
+        let gameLayout = document.querySelector('.game-layout');
+        if (!gameLayout) {
+            gameLayout = document.createElement('div');
+            gameLayout.className = 'game-layout';
+            
+            const gameSection = document.createElement('div');
+            gameSection.className = 'game-section';
+            gameLayout.appendChild(gameSection);
+            
+            const header = document.querySelector('header');
+            header.insertAdjacentElement('afterend', gameLayout);
+        }
     
         // Move and show leaderboard
         const leaderboard = document.getElementById('leaderboard');
-        if (leaderboard && gameInProgress) {
-            // Only move if it's still in the modal
-            if (leaderboard.parentElement.id === 'room-info') {
-                leaderboard.parentElement.removeChild(leaderboard);
-                gameLayout.appendChild(leaderboard);
-            }
+        if (leaderboard && leaderboard.parentElement.id === 'room-info') {
+            leaderboard.parentElement.removeChild(leaderboard);
+            gameLayout.appendChild(leaderboard);
             leaderboard.classList.remove('hidden');
         }
     
@@ -1140,32 +1182,42 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (gameGrid) {
             gameGrid.classList.remove('hidden');
             gameLayout.querySelector('.game-section')?.appendChild(gameGrid);
+    
+            // Re-attach event listeners to all input boxes
+            const guessBoxes = gameGrid.querySelectorAll('.guess-box');
+            guessBoxes.forEach(box => {
+                // Remove existing listeners first
+                const newBox = box.cloneNode(true);
+                box.parentNode.replaceChild(newBox, box);
+                
+                // Add all necessary event listeners
+                newBox.addEventListener('input', filterInput);
+                newBox.addEventListener('input', (event) => {
+                    event.target.classList.add('enlarge');
+                    setTimeout(() => {
+                        event.target.classList.remove('enlarge');
+                    }, 200);
+                });
+                newBox.addEventListener('focus', () => {
+                    lastFocusedInput = newBox;
+                });
+                newBox.addEventListener('input', moveFocus);
+                newBox.addEventListener('input', toUpperCase);
+                newBox.addEventListener('keydown', handleEnter);
+                newBox.addEventListener('keydown', handleBackspace);
+            });
         }
         if (keyboard) {
             keyboard.classList.remove('hidden');
             gameLayout.querySelector('.game-section')?.appendChild(keyboard);
         }
     
-        // Focus on current input
-        const currentRow = attempts + 1;
-        const firstEmptyInput = document.querySelector(`#box-${currentRow}-1`);
-        if (firstEmptyInput) {
-            firstEmptyInput.focus();
+        // Enable current row and set focus
+        setRowEditable(attempts + 1);
+        const firstInput = document.querySelector(`#box-${attempts + 1}-1`);
+        if (firstInput) {
+            firstInput.focus();
         }
-    }
-    
-    function createGameLayout() {
-        const gameLayout = document.createElement('div');
-        gameLayout.className = 'game-layout';
-        
-        const gameSection = document.createElement('div');
-        gameSection.className = 'game-section';
-        gameLayout.appendChild(gameSection);
-        
-        const header = document.querySelector('header');
-        header.insertAdjacentElement('afterend', gameLayout);
-        
-        return gameLayout;
     }
 
     socket.on('joinSuccess', ({ roomId, username, gameInProgress }) => {
@@ -1183,6 +1235,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         const roomCodeDisplay = document.getElementById('room-code-display');
         if (roomCodeDisplay) {
             roomCodeDisplay.textContent = `Room Code: ${roomId}`;
+        }
+
+        const gameContainer = document.querySelector('.game-container') || createGameContainer();
+        const leaderboard = document.getElementById('leaderboard');
+        if (leaderboard) {
+            leaderboard.remove();
+            gameContainer.appendChild(leaderboard);
+            leaderboard.classList.remove('hidden');
         }
     
         // Show/hide appropriate sections
@@ -1225,15 +1285,24 @@ document.addEventListener('DOMContentLoaded', async function() {
             // The server will send a new word automatically
         }
         // Update leaderboard when someone guesses correctly
-        socket.emit('updateScore', {
-            roomId: currentRoom,
-            attempts: attempts
+        socket.emit('getRoomState', currentRoom, (response) => {
+            if (response.success && response.players) {
+                updateLeaderboard(response.players, true);
+            }
         });
     });
     
-    socket.on('updateScores', ({ players }) => {
+    socket.on('updateScores', ({ players, newGame }) => {
         // Update leaderboard with new scores
-        updateLeaderboard(players);
+        updateLeaderboard(players, !newGame);
+        if (gameInProgress) {
+            const leaderboard = document.getElementById('leaderboard');
+            if (leaderboard && leaderboard.parentElement.id === 'room-info') {
+                const gameContainer = document.querySelector('.game-container') || createGameContainer();
+                leaderboard.remove();
+                gameContainer.appendChild(leaderboard);
+            }
+        }
     });
 
     socket.on('newWord', ({ word }) => {
@@ -1242,6 +1311,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         resetGrid();
         attempts = 0;
         setRowEditable(1);
+
+        socket.emit('getRoomState', currentRoom, (response) => {
+            if (response.success && response.players) {
+                updateLeaderboard(response.players, true);
+            }
+        });
         
         // Clear any existing alerts
         const alerts = document.querySelectorAll('.alert-container');
@@ -1256,18 +1331,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         showAlert('New word started!');
     });
 
-    socket.on('gameEnded', ({ players }) => {
-        const sortedPlayers = Object.entries(players)
-            .sort(([, a], [, b]) => b.score - a.score);
-
-        let message = 'Game Over!\n\nFinal Scores:\n';
-        sortedPlayers.forEach(([, player], index) => {
-            message += `${index + 1}. ${player.username}: ${player.score}\n`;
-        });
-
-        showAlert(message);
-        resetGame();
-    });
 
     function resetGrid() {
         // Clear all input boxes
@@ -1532,52 +1595,76 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     let gameInProgress = false;
     let gameTimer = null;
-    const GAME_DURATION = 5 * 60 * 1000; // 5 minutes
+    const GAME_DURATION = 1 * 30 * 1000; // 5 minutes
 
     // Function to update leaderboard
-    function updateLeaderboard(players) {
+    function updateLeaderboard(players, isGameStarted = false) {
         const leaderboard = document.getElementById('leaderboard-content');
         if (!leaderboard) return;
-
-        // Sort players by score (correct guesses)
-        const sortedPlayers = Object.values(players)
-            .sort((a, b) => {
-                // First by correct guesses
-                if (b.correctGuesses !== a.correctGuesses) {
-                    return b.correctGuesses - a.correctGuesses;
-                }
-                // Then by average attempts (lower is better)
-                return (a.totalAttempts / a.correctGuesses || Infinity) - 
-                       (b.totalAttempts / b.correctGuesses || Infinity);
-            });
-
-        leaderboard.innerHTML = sortedPlayers.map((player, index) => `
-            <div class="leaderboard-item">
-                <span class="rank">#${index + 1}</span>
-                <span class="name">${player.username}</span>
-                <span class="score">
-                    ${player.correctGuesses || 0} correct
-                    (${player.totalAttempts || 0} attempts)
-                </span>
-            </div>
-        `).join('');
+    
+        if (!isGameStarted) {
+            // Show simple player list before game starts
+            leaderboard.innerHTML = Object.values(players)
+                .map(player => `
+                    <div class="leaderboard-item">
+                        <span class="name">• ${player.username}</span>
+                    </div>
+                `).join('');
+        } else {
+            // Show scores during game
+            const sortedPlayers = Object.values(players)
+                .sort((a, b) => {
+                    if (b.correctGuesses !== a.correctGuesses) {
+                        return b.correctGuesses - a.correctGuesses;
+                    }
+                    return (a.totalAttempts || 0) - (b.totalAttempts || 0);
+                });
+    
+            leaderboard.innerHTML = sortedPlayers
+                .map((player, index) => `
+                    <div class="leaderboard-item">
+                        <span class="rank">#${index + 1}</span>
+                        <span class="name">${player.username}</span>
+                        <span class="score">
+                            ${player.correctGuesses || 0} correct
+                            (${player.totalAttempts || 0} attempts)
+                        </span>
+                    </div>
+                `).join('');
+        }
     }
 
     function updateRoomTimer(timeLeft) {
-        const minutes = Math.floor(timeLeft / 60000);
-        const seconds = Math.floor((timeLeft % 60000) / 1000);
+        let remainingTime = timeLeft;
         
-        const timerDiv = document.getElementById('room-timer') || document.createElement('div');
-        timerDiv.id = 'room-timer';
-        timerDiv.className = 'room-timer';
-        timerDiv.textContent = `Room expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-        
-        const roomInfoSection = document.getElementById('room-info');
-        if (roomInfoSection && !document.getElementById('room-timer')) {
-            roomInfoSection.insertBefore(timerDiv, roomInfoSection.firstChild);
+        // Clear any existing room timer interval
+        if (roomTimer) {
+            clearInterval(roomTimer);
         }
+    
+        const updateDisplay = () => {
+            const minutes = Math.floor(remainingTime / 60000);
+            const seconds = Math.floor((remainingTime % 60000) / 1000);
+            
+            const timerDiv = document.getElementById('room-timer');
+            if (timerDiv) {
+                timerDiv.textContent = `Room expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+    
+            remainingTime -= 1000;
+    
+            // Check if room has expired
+            if (remainingTime <= 0) {
+                clearInterval(roomTimer);
+                showFinalLeaderboard(true); // true indicates room expired
+            }
+        };
+    
+        // Initial display
+        updateDisplay();
         
-        return timerDiv;
+        // Start countdown
+        roomTimer = setInterval(updateDisplay, 1000);
     }
 
     // Update the socket event handlers
@@ -1590,12 +1677,194 @@ document.addEventListener('DOMContentLoaded', async function() {
         updatePlayerList(players);
         updateRoomTimer(remainingTime);
         
-        if (gameInProgress) {
-            const leaderboard = document.getElementById('leaderboard');
-            if (leaderboard) {
-                leaderboard.classList.remove('hidden');
+        const leaderboard = document.getElementById('leaderboard');
+        if (leaderboard) {
+            leaderboard.classList.remove('hidden');
+            updateLeaderboard(players, gameInProgress); // Pass gameInProgress flag
+        }
+    });
+
+    function showFinalLeaderboard(roomExpired = false) {
+        gameInProgress = false;
+        if (gameTimer) {
+            clearInterval(gameTimer);
+        }
+    
+        // Hide game layout 
+        const gameLayout = document.querySelector('.game-layout');
+        if (gameLayout) {
+            gameLayout.classList.add('hidden');
+        }
+
+        // Disable all input boxes and virtual keyboard
+        const guessBoxes = document.querySelectorAll('.guess-box');
+        guessBoxes.forEach(box => {
+            box.disabled = true;
+            box.classList.add('no-caret');
+        });
+
+        // Disable virtual keyboard clicks
+        const virtualKeyboard = document.querySelector('.virtual-keyboard');
+        if (virtualKeyboard) {
+            virtualKeyboard.style.pointerEvents = 'none';
+            virtualKeyboard.classList.add('disabled');
+        }
+
+        // Add overlay to prevent any clicks on the game grid
+        const gameContainer = document.querySelector('.game-container');
+        if (gameContainer) {
+            gameContainer.classList.add('disabled');
+        }
+    
+        // Create final leaderboard overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay';
+        overlay.id = 'final-leaderboard-overlay';
+    
+        const leaderboardModal = document.createElement('div');
+        leaderboardModal.className = 'final-leaderboard-modal';
+        
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '×';
+        closeButton.className = 'close-button';
+    
+        // Get leaderboard content and clone it
+        const leaderboardContent = document.getElementById('leaderboard').cloneNode(true);
+        leaderboardModal.appendChild(closeButton);
+        leaderboardModal.appendChild(leaderboardContent);
+        overlay.appendChild(leaderboardModal);
+        document.body.appendChild(overlay);
+
+        const styles = document.createElement('style');
+        styles.textContent = `
+            .disabled {
+                pointer-events: none;
+                opacity: 0.7;
             }
-            updateLeaderboard(players);
+
+            .virtual-keyboard.disabled .key {
+                cursor: not-allowed;
+                opacity: 0.7;
+            }
+        `;
+        document.head.appendChild(styles);
+    
+        const handleClose = () => {
+            overlay.remove();
+
+            if (gameContainer) {
+                gameContainer.classList.remove('disabled');
+            }
+            if (virtualKeyboard) {
+                virtualKeyboard.style.pointerEvents = 'auto';
+                virtualKeyboard.classList.remove('disabled');
+            }
+            
+            // Show multiplayer modal with updated state
+            const multiplayerModal = document.getElementById('multiplayer-modal');
+            const roomInfo = document.getElementById('room-info');
+            const gameControls = roomInfo?.querySelector('.game-controls');
+            
+            if (multiplayerModal && roomInfo) {
+                multiplayerModal.classList.remove('hidden');
+                multiplayerModal.classList.add('visible');
+                roomInfo.classList.remove('hidden');
+    
+                // Make sure we have game controls
+                let startButton = document.getElementById('start-game-btn');
+                if (!startButton && gameControls) {
+                    // Create button if it doesn't exist
+                    startButton = document.createElement('button');
+                    startButton.id = 'start-game-btn';
+                    startButton.className = 'game-btn primary-btn';
+                    gameControls.insertBefore(startButton, gameControls.firstChild);
+                }
+    
+                if (startButton) {
+                    // Check if current user is room creator
+                    console.log('Is creator check:', { 
+                        isRoomCreator, 
+                        currentId: socket.id, 
+                        firstPlayer: Object.keys(currentRoomPlayers)[0] 
+                    });
+    
+                    if (isRoomCreator && !roomExpired) {
+                        startButton.textContent = 'Start New Game';
+                        startButton.disabled = false;
+                        startButton.classList.remove('hidden');
+                        
+                        // Remove old event listeners
+                        const newButton = startButton.cloneNode(true);
+                        startButton.parentNode.replaceChild(newButton, startButton);
+                        
+                        // Add new click handler
+                        newButton.addEventListener('click', () => {
+                            socket.emit('startGame', currentRoom);
+                        });
+    
+                        console.log('Start button set up for creator');
+                    } else {
+                        startButton.classList.add('hidden');
+                        console.log('Start button hidden for non-creator');
+                    }
+                }
+            }
+        };
+    
+        closeButton.onclick = handleClose;
+        overlay.onclick = (e) => {
+            if (e.target === overlay) handleClose();
+        };
+    
+        if (roomExpired) {
+            showAlert('Room has expired. Returning to single player mode...');
+            setTimeout(() => window.location.reload(), 2000);
+        }
+    }
+    
+    // Add client-side handler for game end
+    socket.on('gameEnded', ({ players, remainingTime, isCreator }) => {
+        console.log('Game ended received:', { players, remainingTime, isCreator });
+        
+        gameInProgress = false;
+        if (gameTimer) {
+            clearInterval(gameTimer);
+        }
+    
+        // Update scores before showing final leaderboard
+        updateLeaderboard(players, true);
+        
+        // Update room timer
+        updateRoomTimer(remainingTime);
+    
+        // Show final state
+        showFinalLeaderboard(false);
+    
+        // Update start button state
+        const startButton = document.getElementById('start-game-btn');
+        if (startButton) {
+            if (socket.id === isCreator) {
+                startButton.textContent = 'Start Game';
+                startButton.disabled = false;
+                startButton.classList.remove('hidden');
+                
+                // Remove old event listeners
+                const newButton = startButton.cloneNode(true);
+                startButton.parentNode.replaceChild(newButton, startButton);
+                
+                // Add new click handler
+                newButton.addEventListener('click', () => {
+                    socket.emit('startGame', currentRoom);
+                });
+            } else {
+                startButton.classList.add('hidden');
+            }
+        }
+    
+        // Reset game timer display
+        const timerDisplay = document.getElementById('game-timer');
+        if (timerDisplay) {
+            timerDisplay.textContent = 'Time remaining: 0:00';
         }
     });
 
@@ -1627,6 +1896,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         roomInfoSection.classList.add('hidden');
     });
 
+    socket.on('roomTimeUpdate', ({ remainingTime }) => {
+        updateRoomTimer(remainingTime);
+    });
+
     function startGameTimer(timeLimit) {
         console.log('Starting game timer with limit:', timeLimit); // Debug log
     
@@ -1655,21 +1928,46 @@ document.addEventListener('DOMContentLoaded', async function() {
         const updateTimerDisplay = () => {
             const minutes = Math.floor(timeRemaining / 60000);
             const seconds = Math.floor((timeRemaining % 60000) / 1000);
-            timerDisplay.textContent = `Game time remaining: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (timerDisplay) {
+                timerDisplay.textContent = `Time remaining: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            // Broadcast time update to all players
+            if (currentRoom) {
+                socket.emit('updateGameTime', {
+                    roomId: currentRoom,
+                    timeRemaining
+                });
+            }
         };
     
         updateTimerDisplay(); // Initial display
     
         gameTimer = setInterval(() => {
             timeRemaining -= 1000;
-            updateTimerDisplay();
+            
+            if (timerDisplay) {
+                const minutes = Math.floor(timeRemaining / 60000);
+                const seconds = Math.floor((timeRemaining % 60000) / 1000);
+                timerDisplay.textContent = `Time remaining: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
     
             if (timeRemaining <= 0) {
                 clearInterval(gameTimer);
-                endGame();
+                showFinalLeaderboard(false); // false indicates game ended but room hasn't expired
             }
         }, 1000);
     }
+
+    socket.on('gameTimeSync', ({ timeRemaining }) => {
+        const timerDisplay = document.getElementById('game-timer');
+        if (timerDisplay) {
+            const minutes = Math.floor(timeRemaining / 60000);
+            const seconds = Math.floor((timeRemaining % 60000) / 1000);
+            timerDisplay.textContent = `Time remaining: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+    });
 
     socket.on('roomExpired', () => {
         showAlert('Room has expired');
@@ -1701,28 +1999,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     
         socket.emit('startGame', roomCode);
-    }
-
-    function endGame() {
-        gameInProgress = false;
-    
-        // Clear timers
-        if (gameTimer) {
-            clearInterval(gameTimer);
-            gameTimer = null;
-        }
-
-        // Disable input
-        resetGrid();
-
-        showAlert('Game Over! Final scores are displayed in the leaderboard.');
-
-        // Update leaderboard one final time
-        socket.emit('getRoomState', currentRoom, (response) => {
-            if (response.success) {
-                updateLeaderboard(response.players);
-            }
-        });
     }
 
     const leaveRoomBtn = document.getElementById('leave-room-btn');
