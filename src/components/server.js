@@ -223,6 +223,11 @@ io.on('connection', (socket) => {
             return;
         }
 
+        if (room.gameInProgress) {
+            socket.emit('error', { message: 'Cannot join room - game in progress' });
+            return;
+        }
+
         // Check if username is already taken in this room
         const existingNames = Object.values(room.players).map(player => player.username);
         if (existingNames.includes(username)) {
@@ -296,6 +301,33 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('kickPlayer', ({ roomId, playerId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+    
+        // Verify request is from admin
+        const isAdmin = room.players[socket.id]?.isAdmin;
+        if (!isAdmin) return;
+    
+        const playerToKick = room.players[playerId];
+        if (playerToKick) {
+            // Remove player from room
+            delete room.players[playerId];
+
+            // Notify player they're being kicked
+            io.to(playerId).emit('forceKick');
+            
+            // Update other players
+            io.to(roomId).emit('gameState', {
+                players: room.players,
+                remainingTime: room.isActive ? 
+                    ACTIVE_ROOM_TIMEOUT - (Date.now() - room.createdAt) :
+                    INITIAL_ROOM_TIMEOUT - (Date.now() - room.createdAt),
+                gameInProgress: room.gameInProgress
+            });
+        }
+    });
+
     // Add socket connection error handling
     socket.on('connect_error', (error) => {
         console.error('Socket connection error:', error);
@@ -335,6 +367,15 @@ io.on('connection', (socket) => {
             allPlayersReady: allPlayersReady
         });
      });
+
+    socket.on('getTimeRemaining', (roomId) => {
+        const room = rooms[roomId];
+        if (room) {
+            socket.emit('updateTime', {
+                remainingTime: room.expiryTime - Date.now()
+            });
+        }
+    });
      
     socket.on('startGame', async (roomId) => {
         console.log(`Attempting to start game in room ${roomId}`);
@@ -353,41 +394,51 @@ io.on('connection', (socket) => {
      
         try {
             // Reset scores while preserving admin status and username
-            // const playerList = document.querySelectorAll('.player-list li');
-            // playerList.forEach(li => {
-            //     li.classList.remove('player-ready');
-            // });
-
             for (let playerId in room.players) {
                 const isAdmin = room.players[playerId].isAdmin;
                 room.players[playerId] = {
                     username: room.players[playerId].username,
-                    isAdmin: isAdmin,  // Preserve admin status
-                    isReady: false,    // Reset ready status
+                    isAdmin: isAdmin,
+                    isReady: false,
                     correctGuesses: 0,
                     totalAttempts: 0,
                     currentAttempts: 0
                 };
             }
-
-     
-            // Get new word and start game
+    
+            // Set up game state with timer
+            room.gameStartTime = Date.now();
+            room.gameExpiryTime = Date.now() + (30 * 1000); // 30 seconds
+            room.gameInProgress = true;
+    
+            // Get new word
             const response = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
             if (!response.ok) throw new Error('Failed to fetch word');
             
             const data = await response.json();
             room.currentWord = data.word.toUpperCase();
-            room.gameStartTime = Date.now();
-            room.gameInProgress = true;
-     
+    
+            // Start game timer
+            room.gameTimer = setInterval(() => {
+                const timeLeft = room.gameExpiryTime - Date.now();
+                
+                if (timeLeft <= 0) {
+                    clearInterval(room.gameTimer);
+                    room.gameInProgress = false;
+                    io.to(roomId).emit('gameEnded', { players: room.players });
+                } else {
+                    io.to(roomId).emit('updateGameTime', { timeLeft });
+                }
+            }, 1000);
+    
             console.log(`Game started in room ${roomId} with word: ${room.currentWord}`);
-     
+    
             io.to(roomId).emit('gameStarted', {
                 word: room.currentWord,
-                timeLimit: 1 * 30 * 1000,
+                timeLimit: 30 * 1000,
                 players: room.players
             });
-     
+    
         } catch (error) {
             console.error('Error starting game:', error);
             socket.emit('error', { message: 'Failed to start game. Please try again.' });
@@ -662,6 +713,7 @@ app.post('/api/create-room', (req, res) => {
         players: {},
         maxPlayers: 3,
         createdAt: Date.now(),
+        expiryTime: Date.now() + ACTIVE_ROOM_TIMEOUT,  // Add this
         timeout: setTimeout(() => checkRoomExpiry(roomCode), INITIAL_ROOM_TIMEOUT),
         isActive: false
     };

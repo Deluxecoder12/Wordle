@@ -670,20 +670,30 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     function toggleCardVisibility(element) {
         // For instruction and settings cards
-        if (element.classList.contains('hidden')) {
-            element.classList.remove('hidden');
-            element.classList.add('visible');
-            overlay.classList.remove('hidden');
-        } else {
-            element.classList.remove('visible');
-            element.classList.add('hidden');
-            overlay.classList.add('hidden');
+        if (element.id !== 'multiplayer-modal') {
+            if (element.classList.contains('hidden')) {
+                element.classList.remove('hidden');
+                element.classList.add('visible');
+                overlay.classList.remove('hidden');
+            } else {
+                element.classList.remove('visible');
+                element.classList.add('hidden');
+                overlay.classList.add('hidden');
+            }
         }
-    
-        // Reset modal state if it's the multiplayer modal
-        if (element.id === 'multiplayer-modal' && element.classList.contains('hidden')) {
-            if (lobbySection) lobbySection.classList.remove('hidden');
-            if (roomInfoSection) roomInfoSection.classList.add('hidden');
+        // Special handling for multiplayer modal
+        else {
+            if (element.classList.contains('hidden')) {
+                element.classList.remove('hidden');
+                element.classList.add('visible');
+                if (lobbySection) lobbySection.classList.remove('hidden');
+                if (roomInfoSection) roomInfoSection.classList.add('hidden');
+                overlay.classList.remove('hidden');
+            } else {
+                element.classList.remove('visible');
+                element.classList.add('hidden');
+                overlay.classList.add('hidden');
+            }
         }
     }
 
@@ -1176,9 +1186,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Move and show leaderboard
         const leaderboard = document.getElementById('leaderboard');
         if (leaderboard && leaderboard.parentElement.id === 'room-info') {
-            leaderboard.parentElement.removeChild(leaderboard);
-            gameLayout.appendChild(leaderboard);
+            const gameContainer = document.querySelector('.game-container') || createGameContainer();
+            leaderboard.remove();
+            gameContainer.appendChild(leaderboard);
             leaderboard.classList.remove('hidden');
+            // leaderboard.parentElement.removeChild(leaderboard);
+            // gameLayout.appendChild(leaderboard);
+            // leaderboard.classList.remove('hidden');
         }
     
         // Show game elements
@@ -1225,6 +1239,16 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
+    socket.on('forceKick', () => {
+        console.log("Kicked lmao!");
+        if (multiplayerModal) {
+            if (multiplayerModal.classList.contains('visible')) {
+                toggleCardVisibility(multiplayerModal);
+            }
+        }
+        window.location.reload();
+    });
+
     socket.on('joinSuccess', ({ roomId, username, gameInProgress }) => {
         currentRoom = roomId; // Set current room immediately
         currentUsername = username;
@@ -1251,7 +1275,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     
         // Show/hide appropriate sections
-        if (multiplayerModal) multiplayerModal.classList.add('visible');
+        if (multiplayerModal.classList.contains('hidden')) {
+            toggleCardVisibility(multiplayerModal);
+        }
         if (roomInfo) roomInfo.classList.remove('hidden');
         if (lobbySection) lobbySection.classList.add('hidden');
         if (nameInputModal) nameInputModal.classList.add('hidden');
@@ -1378,7 +1404,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         const gameControls = roomInfoSection?.querySelector('.game-controls');
     
         // Hide modals
-        if (multiplayerModal) multiplayerModal.classList.add('hidden');
+        if (!multiplayerModal.classList.contains('visible')) {
+            toggleCardVisibility(multiplayerModal);
+        }
         if (nameInputModal) nameInputModal.classList.add('hidden');
         if (lobbySection) lobbySection.classList.add('hidden');
         
@@ -1670,36 +1698,33 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     function updateRoomTimer(timeLeft) {
-        let remainingTime = timeLeft;
-        
-        // Clear any existing room timer interval
         if (roomTimer) {
             clearInterval(roomTimer);
         }
     
-        const updateDisplay = () => {
+        const timerDiv = document.getElementById('room-timer');
+        if (!timerDiv) return;
+    
+        socket.emit('getTimeRemaining', currentRoom);
+        
+        roomTimer = setInterval(() => {
+            if (currentRoom) {
+                socket.emit('getTimeRemaining', currentRoom);
+            } else {
+                clearInterval(roomTimer);
+            }
+        }, 1000); // Request time from server every second
+    
+        socket.on('updateTime', ({ remainingTime }) => {
             const minutes = Math.floor(remainingTime / 60000);
             const seconds = Math.floor((remainingTime % 60000) / 1000);
-            
-            const timerDiv = document.getElementById('room-timer');
-            if (timerDiv) {
-                timerDiv.textContent = `Room expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-            }
+            timerDiv.textContent = `Room expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
     
-            remainingTime -= 1000;
-    
-            // Check if room has expired
             if (remainingTime <= 0) {
                 clearInterval(roomTimer);
-                showFinalLeaderboard(true); // true indicates room expired
+                showFinalLeaderboard(true);
             }
-        };
-    
-        // Initial display
-        updateDisplay();
-        
-        // Start countdown
-        roomTimer = setInterval(updateDisplay, 1000);
+        });
     }
 
     // Update the socket event handlers
@@ -1929,43 +1954,93 @@ document.addEventListener('DOMContentLoaded', async function() {
     function updatePlayerList(players) {
         console.log('Updating player list:', players);
         const playerListContainer = document.querySelector('.player-list');
-        if (playerListContainer) {
-            const ul = document.createElement('ul');
-            Object.values(players).forEach(player => {
-                const li = document.createElement('li');
-                li.style.padding = '8px';
-                li.style.margin = '4px 0';
-                li.style.borderRadius = '4px';
-                li.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                
-                // Add ready status class if player is ready
-                if (player.isReady) {
-                    li.classList.add('player-ready');
-                }
-                
-                // Add player name and status
-                li.innerHTML = `
-                    ${player.username}
-                    ${player.isAdmin ? ' 👑' : ''}
-                    ${player.isReady ? ' <span class="ready-check">✓</span>' : ''}
-                `;
-                
-                ul.appendChild(li);
-            });
-            playerListContainer.innerHTML = '';
-            playerListContainer.appendChild(ul);
-            console.log('Updated player list:', Object.values(players).map(p => ({
-                username: p.username,
-                isAdmin: p.isAdmin,
-                isReady: p.isReady
-            })));
+        if (!playerListContainer) return;
+    
+        const ul = document.createElement('ul');
+        Object.entries(players).forEach(([playerId, player]) => {
+            const li = document.createElement('li');
+            li.style.padding = '8px 12px';
+            li.style.margin = '4px 0';
+            li.style.borderRadius = '4px';
+            li.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+            
+            // Add ready status class if player is ready
+            if (player.isReady) {
+                li.classList.add('player-ready');
+            }
+    
+            // Make non-admin players clickable for admin
+            const canKick = isRoomCreator && 
+                      !player.isAdmin && 
+                      socket.id !== playerId && 
+                      !gameInProgress &&
+                      !player.isReady;
+       
+           if (canKick) {
+               li.style.cursor = 'pointer';
+               li.style.position = 'relative';
+               li.innerHTML = `
+                   ${player.username}
+                   ${player.isReady ? ' <span class="ready-check">✓</span>' : ''}
+                   <span class="kick-icon">❌</span>
+               `;
 
-            // Log ready status for non-admin players
-            const nonAdminPlayers = Object.values(players).filter(p => !p.isAdmin);
-            const allReady = nonAdminPlayers.every(p => p.isReady);
-            console.log('All non-admin players ready:', allReady);
-        }
+               li.addEventListener('click', () => {
+                   showKickConfirmation(playerId, player.username);
+               });
+           } else {
+               li.innerHTML = `
+                   ${player.username}
+                   ${player.isAdmin ? ' 👑' : ''}
+                   ${player.isReady ? ' <span class="ready-check">✓</span>' : ''}
+               `;
+           }
+
+           ul.appendChild(li);
+        });
+    
+        playerListContainer.innerHTML = '';
+        playerListContainer.appendChild(ul);
     }
+
+    function showKickConfirmation(playerId, username) {
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay';
+        overlay.style.display = 'flex';
+        overlay.style.zIndex = '1000';
+
+        const modal = document.createElement('div');
+        modal.className = 'kick-modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3>Kick Player</h3>
+                <p>Are you sure you want to kick ${username}?</p>
+                <div class="modal-buttons">
+                    <button class="confirm-btn">Yes, Kick</button>
+                    <button class="cancel-btn">Cancel</button>
+                </div>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const confirmBtn = modal.querySelector('.confirm-btn');
+        const cancelBtn = modal.querySelector('.cancel-btn');
+
+        confirmBtn.onclick = () => {
+            socket.emit('kickPlayer', { roomId: currentRoom, playerId });
+            overlay.remove();
+        };
+
+        cancelBtn.onclick = () => overlay.remove();
+    }
+    
+    // Add handler for being kicked
+    socket.on('kicked', () => {
+        showAlert('You have been kicked from the room');
+        setTimeout(() => window.location.reload(), 2000);
+    });
 
     socket.on('roomFull', () => {
         showAlert('Room is full! Maximum 8 players allowed.');
@@ -2002,40 +2077,21 @@ document.addEventListener('DOMContentLoaded', async function() {
             roomInfo.insertBefore(timerDisplay, roomInfo.firstChild);
         }
     
-        // Update timer immediately
-        const updateTimerDisplay = () => {
-            const minutes = Math.floor(timeRemaining / 60000);
-            const seconds = Math.floor((timeRemaining % 60000) / 1000);
-            
+        // Listen for server time updates
+        socket.on('updateGameTime', ({ timeLeft }) => {
             if (timerDisplay) {
+                const minutes = Math.floor(timeLeft / 60000);
+                const seconds = Math.floor((timeLeft % 60000) / 1000);
                 timerDisplay.textContent = `Time remaining: ${minutes}:${seconds.toString().padStart(2, '0')}`;
             }
-
-            // Broadcast time update to all players
-            if (currentRoom) {
-                socket.emit('updateGameTime', {
-                    roomId: currentRoom,
-                    timeRemaining
-                });
-            }
-        };
+        });
     
-        updateTimerDisplay(); // Initial display
-    
-        gameTimer = setInterval(() => {
-            timeRemaining -= 1000;
-            
-            if (timerDisplay) {
-                const minutes = Math.floor(timeRemaining / 60000);
-                const seconds = Math.floor((timeRemaining % 60000) / 1000);
-                timerDisplay.textContent = `Time remaining: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-            }
-    
-            if (timeRemaining <= 0) {
+        socket.on('gameEnded', ({ players }) => {
+            if (gameTimer) {
                 clearInterval(gameTimer);
-                showFinalLeaderboard(false); // false indicates game ended but room hasn't expired
             }
-        }, 1000);
+            showFinalLeaderboard(false);
+        });
     }
 
     socket.on('gameTimeSync', ({ timeRemaining }) => {
@@ -2271,8 +2327,23 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Show modal when clicking multiplayer icon
     multiplayerIcon.addEventListener('click', (e) => {
         e.preventDefault();
-        toggleCardVisibility(multiplayerModal);
-        // Make sure name input is hidden when opening multiplayer modal
+        const multiplayerModal = document.getElementById('multiplayer-modal');
+        const roomInfo = document.getElementById('room-info');
+        const lobbySection = document.getElementById('lobby-section');
+
+        if (currentRoom) {
+            // If in a room, show room info instead of lobby
+            if (multiplayerModal) {
+                toggleCardVisibility(multiplayerModal);
+                if (roomInfo) roomInfo.classList.remove('hidden');
+                if (lobbySection) lobbySection.classList.add('hidden');
+            }
+        } else {
+            // Not in a room, show default join/create view
+            toggleCardVisibility(multiplayerModal);
+        }
+
+        // Make sure name input is hidden
         nameInputModal.classList.add('hidden');
     });
     
