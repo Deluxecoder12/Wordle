@@ -835,6 +835,18 @@ input[type="checkbox"]:checked::before {
     background-color: #cc0000;
 }
 
+.game-container > .leaderboard {
+    grid-column: 3;
+    min-width: 250px;
+    max-width: 300px;
+    height: fit-content;
+    padding: 20px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    position: sticky;
+    top: 20px;
+}
+
 .game-controls {
     display: flex;
     flex-direction: column;
@@ -875,12 +887,29 @@ input[type="checkbox"]:checked::before {
     font-weight: bold;
 }
 
+.stats-button {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+}
+
+.stats-button[disabled] {
+    cursor: not-allowed;
+}
+
+.stats-button[disabled] img {
+    opacity: 0.5;
+}
+
 .leaderboard {
-    width: 25%;
+    width: fit-content;
+    max-height: fit-content;
     padding: 15px;
     background-color: rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     margin-left: 20px;
+    left: 25%;
 }
 
 .leaderboard h3 {
@@ -972,6 +1001,10 @@ input[type="checkbox"]:checked::before {
     width: 70%;
 }
 
+.game-section .leaderboard {
+    display: none;
+}
+
 .game-btn {
     width: 100%;
     padding: 12px 20px;
@@ -989,7 +1022,7 @@ input[type="checkbox"]:checked::before {
 
 .game-layout {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 200px 1fr 300px;
     gap: 20px;
     padding: 20px;
     max-width: 1200px;
@@ -1000,8 +1033,35 @@ input[type="checkbox"]:checked::before {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;;
     gap: 20px;
+    grid-column: 2;
+}
+
+.game-container .leaderboard {
+    grid-column: 3;
+    min-width: 250px;
+    max-width: 300px;
+    height: fit-content;
+    padding: 20px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    position: sticky;
+    top: 20px;
+}
+
+.game-container .leaderboard h3 {
+    text-align: center;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.game-container .leaderboard-content {
+    max-height: 400px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
 
 #start-game-btn:not([disabled]) {
@@ -1020,22 +1080,14 @@ input[type="checkbox"]:checked::before {
     cursor: not-allowed;
 }
 
-.leaderboard {
-    min-width: fit-content;
-    max-width: 300px;
-    height: fit-content;
-    padding: 20px;
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    position: sticky;
-    top: 20px;
-}
-
-.leaderboard h3 {
-    text-align: center;
-    margin-bottom: 15px;
+.player-name {
     font-size: 1.2em;
     font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.player-score {
+    font-size: 1.1em;
 }
 
 .leaderboard-item {
@@ -1064,13 +1116,6 @@ input[type="checkbox"]:checked::before {
     text-align: right;
     font-size: 0.9em;
     color: rgba(255, 255, 255, 0.8);
-}
-
-#leaderboard-content {
-    max-height: 400px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
 
 #leaderboard-content::-webkit-scrollbar {
@@ -1306,6 +1351,17 @@ input[type="checkbox"]:checked::before {
     opacity: 1;
 }
 
+.player-profile {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 15px;
+    height: fit-content;
+}
+
+.profile-content {
+    text-align: center;
+}
+
 .kick-confirmation {
     padding: 20px;
     text-align: center;
@@ -1400,16 +1456,20 @@ input[type="checkbox"]:checked::before {
 }
 
 .final-leaderboard-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     background: var(--background-color);
+    color: var(--text-color);
     padding: 30px;
     border-radius: 8px;
-    z-index: 1001;
-    min-width: 300px;
+    width: 90%;
     max-width: 500px;
+    position: fixed;  /* Change to fixed */
+    top: 50%;        /* Position from top */
+    left: 50%;       /* Position from left */
+    transform: translate(-50%, -50%);
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: 10010;
+
 }
 
 .final-leaderboard-modal h2 {
@@ -1448,6 +1508,55 @@ input[type="checkbox"]:checked::before {
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
+}
+
+.game-container .leaderboard-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.game-container .leaderboard-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.game-container .leaderboard-content::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .game-container {
+        grid-template-columns: 180px 1fr 250px;
+        padding: 10px;
+    }
+}
+
+@media (max-width: 992px) {
+    .game-container {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .player-profile {
+        grid-column: 1;
+        position: static;
+    }
+
+    .game-section {
+        grid-column: 1;
+    }
+
+    .game-container .leaderboard {
+        grid-column: 1;
+        position: static;
+        max-width: 100%;
+    }
+
+    /* Modal stays centered on mobile */
+    .final-leaderboard-modal {
+        width: 90%;
+        max-width: 400px;
+    }
 }
 /* Adjust styles for screens smaller than 768px
 @media (max-width: 768px) {

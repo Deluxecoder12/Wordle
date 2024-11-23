@@ -393,6 +393,12 @@ io.on('connection', (socket) => {
         }
      
         try {
+            room.wordSequence = [];
+            for(let i = 0; i < 30; i++) {
+                const response = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
+                const data = await response.json();
+                room.wordSequence.push(data.word.toUpperCase());
+            }
             // Reset scores while preserving admin status and username
             for (let playerId in room.players) {
                 const isAdmin = room.players[playerId].isAdmin;
@@ -400,6 +406,7 @@ io.on('connection', (socket) => {
                     username: room.players[playerId].username,
                     isAdmin: isAdmin,
                     isReady: false,
+                    currentWordIndex: 0,
                     correctGuesses: 0,
                     totalAttempts: 0,
                     currentAttempts: 0
@@ -408,7 +415,7 @@ io.on('connection', (socket) => {
     
             // Set up game state with timer
             room.gameStartTime = Date.now();
-            room.gameExpiryTime = Date.now() + (30 * 1000); // 30 seconds
+            room.gameExpiryTime = Date.now() + (5 * 60 * 1000);
             room.gameInProgress = true;
     
             // Get new word
@@ -434,8 +441,8 @@ io.on('connection', (socket) => {
             console.log(`Game started in room ${roomId} with word: ${room.currentWord}`);
     
             io.to(roomId).emit('gameStarted', {
-                word: room.currentWord,
-                timeLimit: 30 * 1000,
+                word: room.wordSequence[0],
+                timeLimit: 5 * 60 * 1000,
                 players: room.players
             });
     
@@ -534,13 +541,20 @@ io.on('connection', (socket) => {
             }
     
             const data = await response.json();
-            if (!data.isValid && guessedWord.toLowerCase() === room.currentWord.toLowerCase()) {
-                socket.emit('error', { message: 'Invalid word' });
-                return;
-            }
-    
-            player.totalAttempts = (player.totalAttempts || 0) + 1;
-            player.currentAttempts = (player.currentAttempts || 0) + 1;
+            // if (data.isValid || guessedWord.toLowerCase() === room.currentWord.toLowerCase()) {
+            //     player.totalAttempts++;
+                
+            //     // Update all players about the attempt
+            //     io.to(roomId).emit('updateScores', {
+            //         players: room.players
+            //     });
+            // }
+            player.currentAttempts = (player.currentAttempts || 0);
+
+            // Update all players about the attempt
+            io.to(roomId).emit('updateScores', {
+                players: room.players
+            });
     
         } catch (error) {
             console.error('Error handling guess:', error);
@@ -563,58 +577,78 @@ io.on('connection', (socket) => {
         }
 
         const player = room.players[socket.id];
-        player.correctGuesses = (player.correctGuesses || 0) + 1;
-        player.totalAttempts = (player.totalAttempts || 0) + attempts;
 
         try {
-            // Validate word
-            const response = await fetch(
-                `http://localhost:${process.env.PORT || 3001}/api/validate-word?word=${word}`
-            );
-            
-            if (!response.ok) {
-                socket.emit('error', { message: 'Error validating word' });
-                return;
-            }
-    
-            // Update player stats
-            player.totalAttempts = (player.totalAttempts || 0) + attempts;
-    
-            // Check if word is correct
-            if (word.toUpperCase() === room.currentWord) {
-                // Increment correct guesses
-                player.correctGuesses = (player.correctGuesses || 0) + 1;
-                
-                // Get new word for the room
-                const newWordResponse = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
-                if (!newWordResponse.ok) {
-                    throw new Error('Failed to fetch new word');
+            const currentWord = room.wordSequence[player.currentWordIndex];
+
+            if (word.toUpperCase() === currentWord) {
+                // Correct guess
+                if (player.currentAttempts >= 6) {
+                    player.totalAttempts = (player.totalAttempts || 0) + 6;
                 }
-                
-                const newWordData = await newWordResponse.json();
-                room.currentWord = newWordData.word.toUpperCase();
-    
-                // Notify about correct guess
+                player.totalAttempts = (player.totalAttempts || 0) + attempts;
+                player.correctGuesses++;
+                player.currentAttempts = 0;
+            
+                player.currentWordIndex++;
+
+                // Notify about player's success
                 socket.broadcast.to(roomId).emit('playerGuessedWord', {
                     username: player.username,
                     score: player.correctGuesses
                 });
-    
-                // Send new word to all players
-                io.to(roomId).emit('newWord', { 
-                    word: room.currentWord 
+
+                if (player.currentWordIndex < room.wordSequence.length) {
+                    // Send next word to this player only
+                    socket.emit('newWord', {
+                        word: room.wordSequence[player.currentWordIndex]
+                    });
+                } else {
+                    // Player finished all words
+                    socket.emit('completedAllWords');
+                }
+
+            } else if (player.currentAttempts >= 6) {
+                // All attempts used
+                socket.emit('allAttemptsUsed', {
+                    correctWord: currentWord,
+                    nextWord: room.wordSequence[player.currentWordIndex + 1]
                 });
-                
-                // Update everyone's scores
-                io.to(roomId).emit('updateScores', {
-                    players: room.players,
-                    gameInProgress: true
-                });
+                player.totalAttempts = (player.totalAttempts || 0) + 6;
+                player.currentWordIndex++;
+                player.currentAttempts = 0;
             }
-    
+
+            // Update everyone's scores
+            io.to(roomId).emit('updateScores', {
+                players: room.players,
+                gameInProgress: true
+            });
+
         } catch (error) {
             console.error('Error handling guess:', error);
             socket.emit('error', { message: 'Error processing guess' });
+        }
+    });
+
+    socket.on('maxAttemptsReached', ({ roomId }) => {
+        const room = rooms[roomId];
+        const player = room.players[socket.id];
+        
+        if (!room || !player) return;
+    
+        const currentWord = room.wordSequence[player.currentWordIndex];
+        player.currentWordIndex++;
+        player.currentAttempts = 0;
+        player.totalAttempts = (player.totalAttempts || 0) + 6;
+    
+        if (player.currentWordIndex < room.wordSequence.length) {
+            socket.emit('allAttemptsUsed', {
+                correctWord: currentWord,
+                nextWord: room.wordSequence[player.currentWordIndex]
+            });
+        } else {
+            socket.emit('completedAllWords');
         }
     });
 

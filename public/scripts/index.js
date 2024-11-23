@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     let attempts = 0;
     const maxAttempts = 6;
     let targetWord;
+    let statsIconDisabled = false;
 
     let currentUsername = null;
     let currentRoomPlayers = new Set();
@@ -38,6 +39,42 @@ document.addEventListener('DOMContentLoaded', async function() {
                 username: currentUsername
             });
         }
+    });
+
+    function updateStatsIconState() {
+        const statsIcon = document.getElementById('stats-icon');
+        if (!statsIcon) return;
+        console.log('Updating stats icon state');
+        console.log('Current room:', currentRoom);
+        console.log('Game in progress:', gameInProgress);
+        
+        if (currentRoom && gameInProgress) {
+            statsIcon.style.opacity = '0.5';
+            statsIcon.style.cursor = 'not-allowed';
+            statsIcon.parentElement.setAttribute('disabled', 'true');
+            statsIcon.parentElement.setAttribute('aria-disabled', 'true');
+            statsIconDisabled = true;
+        } else {
+            statsIcon.style.opacity = '1';
+            statsIcon.style.cursor = 'pointer';
+            statsIcon.parentElement.removeAttribute('disabled');
+            statsIcon.parentElement.setAttribute('aria-disabled', 'false');
+            statsIconDisabled = false;
+        }
+    }
+
+    document.getElementById('stats-icon').addEventListener('click', (e) => {
+        console.log('Stats icon clicked');
+        console.log('statsIconDisabled:', statsIconDisabled);
+        console.log('currentRoom:', currentRoom);
+        console.log('gameInProgress:', gameInProgress);
+        if (statsIconDisabled) {
+            e.preventDefault();
+            e.stopPropagation();
+            showAlert('Stats are disabled in multiplayer mode');
+            return false;
+        }
+        // Your existing stats functionality here
     });
 
     // Function to get or generate the daily challenge word
@@ -484,7 +521,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                             socket.emit('wordGuessed', {
                                 roomId: currentRoom,
                                 word: guess,
-                                attempts: attempts + 1
+                                attempts: rowId
                             });
                             showAlert(`<span class="bold-text">Correct!</span> Waiting for next word...`);
                         } else {
@@ -500,6 +537,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 attempts++;
                 if (attempts >= maxAttempts) {
                     if (currentRoom && gameInProgress) {
+                        socket.emit('maxAttemptsReached', { roomId: currentRoom });
                         showAlert(`<span class="bold-text">Word not guessed!</span> The word was: ${targetWord}. Waiting for next word...`);
                     } else {
                         showAlert(`<span class="bold-text">Game Over!</span> The word was: ${targetWord}`);
@@ -529,6 +567,20 @@ document.addEventListener('DOMContentLoaded', async function() {
             input.value = value.replace(/[^A-Za-z]/g, ''); // Replace with empty string
         }
     }
+
+    socket.on('completedAllWords', () => {
+        showAlert('You have completed all words in this game!');
+    });
+    
+    socket.on('allAttemptsUsed', ({ correctWord, nextWord }) => {
+        showAlert(`The word was: ${correctWord}`);
+        setTimeout(() => {
+            resetGrid();
+            targetWord = nextWord;
+            attempts = 0;
+            setRowEditable(1);
+        }, 2000);
+    });
 
     // Function to handle Backspace key press
     function handleBackspace(event) {
@@ -1072,12 +1124,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     socket.on('gameStarted', ({ word, timeLimit, gameAlreadyStarted}) => {
+        
         console.log('Game started event received:', { gameAlreadyStarted });
         gameInProgress = true;
         targetWord = word.toUpperCase();
         attempts = 0;
 
         resetGrid();
+        updateStatsIconState();
 
         const playerList = document.querySelectorAll('.player-list li');
         playerList.forEach(li => {
@@ -1098,18 +1152,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         // Ensure room info is visible
         if (roomInfo) roomInfo.classList.remove('hidden');
-
-        // Move leaderboard out of modal immediately
-        if (leaderboard && leaderboard.parentElement.id === 'room-info') {
-            const gameContainer = document.querySelector('.game-container') || createGameContainer();
-            leaderboard.remove();
-            gameContainer.appendChild(leaderboard);
-            leaderboard.classList.remove('hidden');
-            // Get current players from room info and update leaderboard
-            if (roomInfo.players) {
-                updateLeaderboard(roomInfo.players, false); // true for game started
-            }
-        }
 
         let startButton = document.getElementById('start-game-btn');
         if (!startButton && gameControls) {
@@ -1148,13 +1190,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     function createGameContainer() {
-    const gameContainer = document.createElement('div');
-    gameContainer.className = 'game-container';
-    
-    const header = document.querySelector('header');
-    header.insertAdjacentElement('afterend', gameContainer);
-    
-    return gameContainer;
+        return null;
     }
 
     function setupGameUI() {
@@ -1175,60 +1211,61 @@ document.addEventListener('DOMContentLoaded', async function() {
             gameLayout = document.createElement('div');
             gameLayout.className = 'game-layout';
             
+            // Create three sections: player profile, game section, leaderboard
+            const playerProfile = document.createElement('div');
+            playerProfile.className = 'player-profile';
+            playerProfile.innerHTML = `
+                <div class="profile-content">
+                    <div class="player-name">${currentUsername}</div>
+                    <div class="player-score">0 correct (0 attempts)</div>
+                </div>
+            `;
+    
             const gameSection = document.createElement('div');
             gameSection.className = 'game-section';
-            gameLayout.appendChild(gameSection);
+    
+            let leaderboard = document.getElementById('leaderboard');
+            if (!leaderboard) {
+                leaderboard = document.createElement('div');
+                leaderboard.id = 'leaderboard';
+                leaderboard.className = 'leaderboard';
+                leaderboard.innerHTML = `
+                    <h3>Leaderboard</h3>
+                    <div id="leaderboard-content"></div>
+                `;
+            } else {
+                leaderboard.classList.remove('hidden');
+                // Remove from current location if it exists somewhere else
+                if (leaderboard.parentElement) {
+                    leaderboard.remove();
+                }
+            }
             
+            // Add sections to layout in correct order
+            gameLayout.appendChild(playerProfile);
+            gameLayout.appendChild(gameSection);
+            if (leaderboard) {
+                gameLayout.appendChild(leaderboard);
+            }
+    
             const header = document.querySelector('header');
             header.insertAdjacentElement('afterend', gameLayout);
         }
     
-        // Move and show leaderboard
-        const leaderboard = document.getElementById('leaderboard');
-        if (leaderboard && leaderboard.parentElement.id === 'room-info') {
-            const gameContainer = document.querySelector('.game-container') || createGameContainer();
-            leaderboard.remove();
-            gameContainer.appendChild(leaderboard);
-            leaderboard.classList.remove('hidden');
-            // leaderboard.parentElement.removeChild(leaderboard);
-            // gameLayout.appendChild(leaderboard);
-            // leaderboard.classList.remove('hidden');
-        }
-    
-        // Show game elements
+        // Move game elements to game section
+        const gameSection = gameLayout.querySelector('.game-section');
         const gameGrid = document.querySelector('.word-guess');
         const keyboard = document.querySelector('.virtual-keyboard');
-        if (gameGrid) {
-            gameGrid.classList.remove('hidden');
-            gameLayout.querySelector('.game-section')?.appendChild(gameGrid);
     
-            // Re-attach event listeners to all input boxes
-            const guessBoxes = gameGrid.querySelectorAll('.guess-box');
-            guessBoxes.forEach(box => {
-                // Remove existing listeners first
-                const newBox = box.cloneNode(true);
-                box.parentNode.replaceChild(newBox, box);
-                
-                // Add all necessary event listeners
-                newBox.addEventListener('input', filterInput);
-                newBox.addEventListener('input', (event) => {
-                    event.target.classList.add('enlarge');
-                    setTimeout(() => {
-                        event.target.classList.remove('enlarge');
-                    }, 200);
-                });
-                newBox.addEventListener('focus', () => {
-                    lastFocusedInput = newBox;
-                });
-                newBox.addEventListener('input', moveFocus);
-                newBox.addEventListener('input', toUpperCase);
-                newBox.addEventListener('keydown', handleEnter);
-                newBox.addEventListener('keydown', handleBackspace);
-            });
-        }
-        if (keyboard) {
-            keyboard.classList.remove('hidden');
-            gameLayout.querySelector('.game-section')?.appendChild(keyboard);
+        if (gameSection) {
+            if (gameGrid) {
+                gameGrid.classList.remove('hidden');
+                gameSection.appendChild(gameGrid);
+            }
+            if (keyboard) {
+                keyboard.classList.remove('hidden');
+                gameSection.appendChild(keyboard);
+            }
         }
     
         // Enable current row and set focus
@@ -1236,6 +1273,18 @@ document.addEventListener('DOMContentLoaded', async function() {
         const firstInput = document.querySelector(`#box-${attempts + 1}-1`);
         if (firstInput) {
             firstInput.focus();
+        }
+    
+        // Remove game-container if it exists
+        const gameContainer = document.querySelector('.game-container');
+        if (gameContainer) {
+            // Move any remaining content to appropriate places
+            const leaderboard = gameContainer.querySelector('.leaderboard');
+            if (leaderboard) {
+                leaderboard.remove(); // Remove if it exists in game-container
+            }
+            // Remove the container
+            gameContainer.remove();
         }
     }
 
@@ -1253,6 +1302,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         currentRoom = roomId; // Set current room immediately
         currentUsername = username;
         
+        socket.emit('getRoomState', roomId, (response) => {
+            if (response.success) {
+                updateLeaderboard(response.players, response.gameInProgress);
+            }
+        });
+        updateStatsIconState();
+        
         // Show room info section and hide other sections
         const multiplayerModal = document.getElementById('multiplayer-modal');
         const roomInfo = document.getElementById('room-info');
@@ -1264,14 +1320,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         const roomCodeDisplay = document.getElementById('room-code-display');
         if (roomCodeDisplay) {
             roomCodeDisplay.textContent = `Room Code: ${roomId}`;
-        }
-
-        const gameContainer = document.querySelector('.game-container') || createGameContainer();
-        const leaderboard = document.getElementById('leaderboard');
-        if (leaderboard) {
-            leaderboard.remove();
-            gameContainer.appendChild(leaderboard);
-            leaderboard.classList.remove('hidden');
         }
     
         // Show/hide appropriate sections
@@ -1309,6 +1357,15 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
     
+    socket.on('allAttemptsUsed', ({ correctWord, nextWord }) => {
+        showAlert(`The word was: ${correctWord}`);
+        setTimeout(() => {
+            resetGrid();
+            targetWord = nextWord;
+            attempts = 0;
+            setRowEditable(1);
+        }, 2000);
+    });
     
     socket.on('wordGuessed', ({ username, word, attempts }) => {
         if (username !== currentUsername) {
@@ -1662,38 +1719,69 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Function to update leaderboard
     function updateLeaderboard(players, isGameStarted = false) {
-        const leaderboard = document.getElementById('leaderboard-content');
-        if (!leaderboard) return;
+        console.log('Updating leaderboard with players:', players); // Debug log
+        // Update the final leaderboard content
+        const leaderboardContent = document.getElementById('leaderboard-content');
+        const playerProfile = document.querySelector('.profile-content');
     
-        if (!isGameStarted) {
-            // Show simple player list before game starts
-            leaderboard.innerHTML = Object.values(players)
-                .map(player => `
-                    <div class="leaderboard-item">
-                        <span class="name">• ${player.username}</span>
-                    </div>
-                `).join('');
-        } else {
-            // Show scores during game
-            const sortedPlayers = Object.values(players)
-                .sort((a, b) => {
-                    if (b.correctGuesses !== a.correctGuesses) {
-                        return b.correctGuesses - a.correctGuesses;
-                    }
-                    return (a.totalAttempts || 0) - (b.totalAttempts || 0);
-                });
+        // Update player profile
+        if (playerProfile && currentUsername) {
+            const currentPlayer = Object.values(players).find(p => p.username === currentUsername);
+            if (currentPlayer) {
+                playerProfile.innerHTML = `
+                   <h3>${currentUsername}</h3>
+                   <div class="player-stats">
+                       ${currentPlayer.correctGuesses || 0} correct 
+                       (${currentPlayer.totalAttempts || 0} attempts)
+                       ${isGameStarted ? `<br>Current attempts: ${currentPlayer.currentAttempts || 0}` : ''}
+                   </div>
+                `;
+            }
+        }
     
-            leaderboard.innerHTML = sortedPlayers
-                .map((player, index) => `
-                    <div class="leaderboard-item">
-                        <span class="rank">#${index + 1}</span>
-                        <span class="name">${player.username}</span>
-                        <span class="score">
-                            ${player.correctGuesses || 0} correct
-                            (${player.totalAttempts || 0} attempts)
-                        </span>
+        if (leaderboardContent) {
+            if (!isGameStarted) {
+                // Simple player list before game starts
+                leaderboardContent.innerHTML = `
+                    <h3>Players</h3>
+                    <div class="leaderboard-content">
+                        ${Object.values(players)
+                            .map(player => `
+                                <div class="leaderboard-item">
+                                    • ${player.username}
+                                </div>
+                            `).join('')}
                     </div>
-                `).join('');
+                `;
+            } else {
+                // Sorted scores during game
+                const sortedPlayers = Object.values(players)
+                    .sort((a, b) => {
+                        if (b.correctGuesses !== a.correctGuesses) {
+                            return b.correctGuesses - a.correctGuesses;
+                        }
+                        return (a.totalAttempts || 0) - (b.totalAttempts || 0);
+                    });
+     
+                leaderboardContent.innerHTML = `
+                    <div class="leaderboard-content">
+                        ${sortedPlayers.map((player, index) => `
+                            <div class="leaderboard-item">
+                                <span class="rank">#${index + 1}</span>
+                                <span class="name">
+                                    ${player.username}${player.isAdmin ? ' 👑' : ''}
+                                </span>
+                                <div class="score">
+                                    <div>${player.correctGuesses || 0} correct</div>
+                                    <div class="attempts">
+                                        Total: ${player.totalAttempts || 0}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
         }
     }
 
@@ -1737,11 +1825,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         updatePlayerList(players);
         updateRoomTimer(remainingTime);
         
-        const leaderboard = document.getElementById('leaderboard');
-        if (leaderboard) {
-            leaderboard.classList.remove('hidden');
-            updateLeaderboard(players, gameInProgress); // Pass gameInProgress flag
-        }
+        updateLeaderboard(players, gameInProgress);
 
         const readyButton = document.getElementById('ready-btn');
         const startButton = document.getElementById('start-game-btn');
@@ -1813,15 +1897,30 @@ document.addEventListener('DOMContentLoaded', async function() {
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '×';
         closeButton.className = 'close-button';
+
+        const title = document.createElement('h2');
+        title.textContent = 'Game Results';
+        title.style.textAlign = 'center';
+        title.style.marginBottom = '20px';
     
         // Get leaderboard content and clone it
         const leaderboardContent = document.getElementById('leaderboard').cloneNode(true);
         leaderboardModal.appendChild(closeButton);
+        leaderboardModal.appendChild(title); 
         leaderboardModal.appendChild(leaderboardContent);
         overlay.appendChild(leaderboardModal);
         document.body.appendChild(overlay);
 
+        // Create a unique ID for the style element
+        const styleId = 'final-leaderboard-styles';
+        // Remove existing style if it exists
+        const existingStyle = document.getElementById(styleId);
+        if (existingStyle) {
+            existingStyle.remove();
+        }
+
         const styles = document.createElement('style');
+        styles.id = styleId; // Add ID to style element
         styles.textContent = `
             .disabled {
                 pointer-events: none;
@@ -1836,7 +1935,17 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.head.appendChild(styles);
     
         const handleClose = () => {
+            const styleElement = document.getElementById(styleId);
+            if (styleElement) {
+                styleElement.remove();
+            }
+
             overlay.remove();
+
+            const finalLeaderboardModal = document.querySelector('.final-leaderboard-modal');
+            if (finalLeaderboardModal) {
+                finalLeaderboardModal.remove();
+            }
 
             if (gameContainer) {
                 gameContainer.classList.remove('disabled');
@@ -1912,6 +2021,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (gameTimer) {
             clearInterval(gameTimer);
         }
+        updateStatsIconState();
     
         // Update scores before showing final leaderboard
         updateLeaderboard(players, true);
@@ -2131,6 +2241,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             startButton.disabled = true;
             startButton.textContent = 'Starting...';
         }
+        updateStatsIconState();
     
         socket.emit('startGame', roomCode);
     }
@@ -2219,6 +2330,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     
             // Hide confirmation modal
             hideLeaveConfirmation();
+
+            updateStatsIconState();
     
             // Reset local state
             resetGame();

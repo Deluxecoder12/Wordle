@@ -17,7 +17,9 @@
                 <li class="Heading"><a href="/">Wordle Unlimited</a></li>
                 <li class="Left question"><img id="question-icon" src="assets/images/Question_icon.png" alt="How to Play?"></li>
                 <li class="Left"><img id="multiplayer-icon" src="assets/images/Multiplayer_icon.png" alt="Multiplayer"></li> 
-                <li><a href="#"><img id="stats-icon" src="assets/images/Stats_icon.png" alt="Game Stats"></a></li> <!--Will show a graph of score history-->
+                <button class="stats-button" aria-label="View stats">
+                    <img src="assets/images/Stats_icon.png" alt="Stats" id="stats-icon">
+                </button>
                 <li><a href="#" id="settings-link"><img id="settings-icon" src="assets/images/Settings_icon.png" alt="Settings"></a></li>
             </ul>
         </nav>
@@ -352,10 +354,6 @@
                             </div>
                         </div>
                         
-                        <div id="leaderboard" class="leaderboard hidden">
-                            <h3>Leaderboard</h3>
-                            <div id="leaderboard-content"></div>
-                        </div>
                     </div>
                     <!-- Game control buttons -->
                     <div class="game-controls">
