@@ -27,7 +27,7 @@ app.get('/health', (req, res) => {
 
 const RATE_LIMIT = {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    max: 1500, // Limit each IP to 100 requests per windowMs
     message: 'Too many requests, please try again later',
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false // Disable the `X-RateLimit-*` headers
@@ -126,71 +126,53 @@ const trackApiUsage = (req, res, next) => {
 // Apply tracking middleware to API routes
 app.use('/api/*', trackApiUsage);
 
+// Modified word API endpoint
+const FALLBACK_WORDS = [
+    'APPLE', 'BEACH', 'CHARM', 'DANCE', 'EAGLE',
+    'FLAME', 'GRAPE', 'HAPPY', 'IMAGE', 'JUMBO',
+    'KNIFE', 'LEMON', 'MUSIC', 'NOBLE', 'OCEAN',
+    'PIANO', 'QUEEN', 'RADAR', 'SNAKE', 'TABLE',
+    'UNITY', 'VOICE', 'WATER', 'YOUTH', 'ZEBRA'
+];
+
+// Simplified word API endpoint
 app.get('/api/word', async (req, res) => {
-    const maxRetries = 5; // Define the maximum number of retries
-    let retryCount = 0;
-
-    // Regular expression for 5-letter English words without special characters or spaces
-    const validWordRegex = /^[a-zA-Z]{5}$/;
-
-    // Function to fetch the word and validate it
-    const fetchAndValidateWord = async () => {
-        try {
-            const response = await fetch('https://wordsapiv1.p.rapidapi.com/words/?random=true&letters=5', {
-                method: 'GET',
-                headers: {
-                    'X-RapidAPI-Key': process.env.API_KEY,
-                    'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+    try {
+        const response = await fetch('https://wordsapiv1.p.rapidapi.com/words/?random=true&letters=5', {
+            method: 'GET',
+            headers: {
+                'X-RapidAPI-Key': process.env.API_KEY,
+                'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com'
             }
+        });
 
-            const data = await response.json();
-            const word = data.word || 'DEFAULT'; // Fallback to 'DEFAULT' if word is not found
-
-            // Check if the word matches the regular expression
-            if (validWordRegex.test(word)) {
-                return word;
-            } else {
-                throw new Error('Invalid word fetched');
-            }
-
-        } catch (error) {
-            console.error('Error during word fetch or validation:', error.message);
-            return null;
-        }
-    };
-
-    // Retry mechanism
-    const getValidWord = async () => {
-        let validWord = null;
-
-        while (retryCount < maxRetries && !validWord) {
-            retryCount++;
-            validWord = await fetchAndValidateWord();
+        if (!response.ok) {
+            throw new Error('API request failed');
         }
 
-        return validWord;
-    };
+        const data = await response.json();
+        let word = data.word?.toUpperCase();
 
-    // Get a valid word
-    const word = await getValidWord();
+        // Validate word format
+        if (!word || !/^[A-Z]{5}$/.test(word)) {
+            // Use fallback if word is invalid
+            word = FALLBACK_WORDS[Math.floor(Math.random() * FALLBACK_WORDS.length)];
+        }
 
-    if (word) {
         res.json({ word });
-    } else {
-        console.error('Failed to fetch a valid word after multiple retries');
-        res.status(500).json({ error: 'Failed to fetch a valid word' });
+    } catch (error) {
+        console.error('Error fetching word:', error);
+        // Always return a valid fallback word
+        const fallbackWord = FALLBACK_WORDS[Math.floor(Math.random() * FALLBACK_WORDS.length)];
+        res.json({ word: fallbackWord });
     }
 });
+
 
 class ApiRateLimiter {
     constructor() {
         this.requests = new Map();
-        this.cleanupInterval = setInterval(() => this.cleanup(), 60 * 1000);
+        setInterval(() => this.cleanup(), 60 * 1000);
     }
 
     getKey(ip, window) {
@@ -208,15 +190,15 @@ class ApiRateLimiter {
     }
 
     isLimitExceeded(ip) {
-        const minuteKey = this.getKey(ip, 'minute');
-        const hourKey = this.getKey(ip, 'hour');
-        const dayKey = this.getKey(ip, 'day');
+        const now = Date.now();
+        const windowStart = now - RATE_LIMIT.windowMs;
+        const requestHistory = this.requests.get(ip) || [];
+        
+        // Remove old requests
+        const recentRequests = requestHistory.filter(time => time > windowStart);
+        this.requests.set(ip, recentRequests);
 
-        const minuteCount = this.requests.get(minuteKey) || 0;
-        const hourCount = this.requests.get(hourKey) || 0;
-        const dayCount = this.requests.get(dayKey) || 0;
-
-        return minuteCount >= 20 || hourCount >= 100 || dayCount >= 1000;
+        return recentRequests.length >= RATE_LIMIT.max;
     }
 
     increment(ip) {
@@ -224,6 +206,12 @@ class ApiRateLimiter {
         keys.forEach(key => {
             this.requests.set(key, (this.requests.get(key) || 0) + 1);
         });
+    }
+
+    addRequest(ip) {
+        const requests = this.requests.get(ip) || [];
+        requests.push(Date.now());
+        this.requests.set(ip, requests);
     }
 
     cleanup() {
@@ -262,7 +250,8 @@ const rateLimitMiddleware = (req, res, next) => {
 };
 
 // Apply the limiter middleware to all API routes
-app.use('/api/*', rateLimitMiddleware);
+app.use('/api/word', rateLimitMiddleware);
+app.use('/api/validate-word', rateLimitMiddleware);
 
 app.get('/api/validate-word', async (req, res) => {
     const ip = req.ip || req.connection.remoteAddress;
@@ -555,31 +544,42 @@ io.on('connection', (socket) => {
     });
      
     socket.on('startGame', async (roomId) => {
+        console.log(`Attempting to start game in room ${roomId}`);
         const room = rooms[roomId];
+        
         if (!room) {
             socket.emit('error', { message: 'Room not found' });
             return;
         }
-     
-        const isCreator = Object.keys(room.players)[0] === socket.id;
-        if (!isCreator) {
+    
+        if (Object.keys(room.players)[0] !== socket.id) {
             socket.emit('error', { message: 'Only room creator can start the game' });
             return;
         }
-     
+    
         try {
+            // Initialize word sequence
             room.wordSequence = [];
-            for(let i = 0; i < 30; i++) {
-                const response = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
-                const data = await response.json();
-                room.wordSequence.push(data.word.toUpperCase());
+            
+            // Get words one at a time to avoid overwhelming the API
+            for (let i = 0; i < 30; i++) {
+                try {
+                    const fallbackWord = FALLBACK_WORDS[Math.floor(Math.random() * FALLBACK_WORDS.length)];
+                    room.wordSequence.push(fallbackWord);
+                } catch (error) {
+                    console.error('Error fetching word:', error);
+                    // Use fallback word if fetch fails
+                    const fallbackWord = FALLBACK_WORDS[Math.floor(Math.random() * FALLBACK_WORDS.length)];
+                    room.wordSequence.push(fallbackWord);
+                }
             }
-            // Reset scores while preserving admin status and username
+    
+            // Reset player states
             for (let playerId in room.players) {
-                const isAdmin = room.players[playerId].isAdmin;
+                const { username, isAdmin } = room.players[playerId];
                 room.players[playerId] = {
-                    username: room.players[playerId].username,
-                    isAdmin: isAdmin,
+                    username,
+                    isAdmin,
                     isReady: false,
                     currentWordIndex: 0,
                     correctGuesses: 0,
@@ -588,31 +588,36 @@ io.on('connection', (socket) => {
                 };
             }
     
-            // Set up game state with timer
+            // Set up game state
             room.gameStartTime = Date.now();
             room.gameExpiryTime = Date.now() + (5 * 60 * 1000);
             room.gameInProgress = true;
     
-            // Get new word
-            const response = await fetch(`http://localhost:${process.env.PORT || 3001}/api/word`);
-            if (!response.ok) throw new Error('Failed to fetch word');
-            
-            const data = await response.json();
-            room.currentWord = data.word.toUpperCase();
+            // Clear existing timer if any
+            if (room.gameTimer) {
+                clearInterval(room.gameTimer);
+            }
     
-            // Start game timer
+            // Set up new game timer
             room.gameTimer = setInterval(() => {
                 const timeLeft = room.gameExpiryTime - Date.now();
                 
                 if (timeLeft <= 0) {
                     clearInterval(room.gameTimer);
                     room.gameInProgress = false;
-                    io.to(roomId).emit('gameEnded', { players: room.players });
+                    io.to(roomId).emit('gameEnded', { 
+                        players: room.players,
+                        remainingTime: room.expiryTime - Date.now()
+                    });
                 } else {
                     io.to(roomId).emit('updateGameTime', { timeLeft });
                 }
             }, 1000);
     
+            // Log first word for debugging
+            console.log(`Game started in room ${roomId} with first word: ${room.wordSequence[0]}`);
+    
+            // Notify all players
             io.to(roomId).emit('gameStarted', {
                 word: room.wordSequence[0],
                 timeLimit: 5 * 60 * 1000,
@@ -624,6 +629,11 @@ io.on('connection', (socket) => {
             socket.emit('error', { message: 'Failed to start game. Please try again.' });
         }
     });
+    
+    // Add this utility function if needed
+    function getFallbackWord() {
+        return FALLBACK_WORDS[Math.floor(Math.random() * FALLBACK_WORDS.length)];
+    }
 
     socket.on('updateGameTime', ({ roomId, timeRemaining }) => {
         const room = rooms[roomId];
