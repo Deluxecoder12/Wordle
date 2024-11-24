@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     let currentUsername = null;
     let currentRoomPlayers = new Set();
     let isRoomCreator = false;
+    const DAILY_ATTEMPTS_KEY = 'dailyChallengeAttempts';
+    const DAILY_STATS_KEY = 'dailyChallengeStats';
 
     const socketURL = window.location.hostname === 'localhost' 
     ? 'http://localhost:3001' 
@@ -41,6 +43,78 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
+    const loadDailyChallengeState = () => {
+        if (localStorage.getItem('dailyChallengeMode') === 'true') {
+            const today = new Date().toISOString().slice(0, 10);
+            const attemptsData = JSON.parse(localStorage.getItem(DAILY_ATTEMPTS_KEY)) || {};
+            const todayAttempts = attemptsData[today]?.attempts || [];
+            
+            // Restore previous attempts to the grid
+            todayAttempts.forEach((attempt, index) => {
+                const row = index + 1;
+                // Fill in the letters
+                attempt.guess.split('').forEach((letter, col) => {
+                    const box = document.getElementById(`box-${row}-${col + 1}`);
+                    if (box) {
+                        box.value = letter;
+                        box.classList.add('glow');
+                        box.disabled = true;
+                    }
+                });
+    
+                // Apply the colors
+                attempt.result.forEach((color, col) => {
+                    const box = document.getElementById(`box-${row}-${col + 1}`);
+                    if (box) {
+                        box.classList.add('flip');
+                        setTimeout(() => {
+                            box.classList.add(color);
+                        }, 150);
+                    }
+                });
+            });
+    
+            // Set proper attempts count
+            attempts = todayAttempts.length;
+            
+            // Enable the correct row for continued play
+            if (attempts < 6 && !attemptsData[today]?.completed) {
+                setRowEditable(attempts + 1);
+            }
+    
+            // Check if challenge is already completed
+            if (attemptsData[today]?.completed) {
+                const stats = JSON.parse(localStorage.getItem(DAILY_STATS_KEY)) || {};
+                const message = stats[today]?.success ? 
+                    'You\'ve already completed today\'s challenge!' :
+                    'You\'ve used all attempts for today. Try again tomorrow!';
+                
+                setTimeout(() => {
+                    showAlert(message);
+                    localStorage.removeItem('dailyChallengeMode');
+                    location.reload();
+                }, 500);
+            }
+        }
+    };    
+
+    const statsModalHTML = `
+        <div id="stats-modal" class="modal-card hidden">
+            <button id="close-button-stats" class="close-button">×</button>
+            <h2>Daily Challenge Statistics</h2>
+            <div class="stats-content">
+                <div class="stats-summary">
+                    <h3>Today's Progress</h3>
+                    <div id="today-stats"></div>
+                </div>
+                <div class="calendar-container">
+                    <h3>Challenge History</h3>
+                    <div id="calendar-grid"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
     function updateStatsIconState() {
         const statsIcon = document.getElementById('stats-icon');
         if (!statsIcon) return;
@@ -63,6 +137,123 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
+    // Add this CSS to your existing styles
+    const statsModalStyles = `
+        .modal-card {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px;
+            max-height: 80vh;
+            background: #000000;
+            border: 1px solid #ccc;
+            color: rgb(245, 245, 245);
+            padding: 30px;
+            padding-top: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transition: opacity 0.3s ease-in-out;
+            overflow-y: auto;
+        }
+
+        .modal-card.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .modal-card.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .close-button {
+            position: sticky;
+            top: 0;
+            left: 100%;
+            width: 35px;
+            height: 35px;
+            font-size: 20px;
+            background: transparent;
+            color: whitesmoke;
+            border: none;
+            cursor: pointer;
+            outline: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1010;
+        }
+
+        .close-button:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .close-button:active {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .stats-content {
+            margin-top: 20px;
+        }
+
+        .stats-summary {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .calendar-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .calendar-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            padding: 10px;
+        }
+
+        .calendar-week {
+            display: flex;
+            gap: 3px;
+        }
+
+        .calendar-day {
+            width: 15px;
+            height: 15px;
+            border-radius: 2px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .calendar-day:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        .intensity-empty { background-color: rgba(255, 255, 255, 0.1); }
+        .intensity-0 { background-color: #ff4444; }
+        .intensity-1 { background-color: #00ff00; }
+        .intensity-2 { background-color: #00dd00; }
+        .intensity-3 { background-color: #00bb00; }
+        .intensity-4 { background-color: #009900; }
+        .intensity-5 { background-color: #007700; }
+        .intensity-6 { background-color: #005500; }
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', statsModalHTML);
+
+    // Add the styles to document
+    const modalStyleSheet = document.createElement('style');
+    modalStyleSheet.textContent = statsModalStyles;
+    document.head.appendChild(modalStyleSheet);
+
     document.getElementById('stats-icon').addEventListener('click', (e) => {
         console.log('Stats icon clicked');
         console.log('statsIconDisabled:', statsIconDisabled);
@@ -74,13 +265,231 @@ document.addEventListener('DOMContentLoaded', async function() {
             showAlert('Stats are disabled in multiplayer mode');
             return false;
         }
-        // Your existing stats functionality here
+        const statsModal = document.getElementById('stats-modal');
+        const overlay = document.getElementById('overlay');
+        
+        // Update today's stats
+        const today = new Date().toISOString().slice(0, 10);
+        const attemptsData = JSON.parse(localStorage.getItem(DAILY_ATTEMPTS_KEY)) || {};
+        const stats = JSON.parse(localStorage.getItem(DAILY_STATS_KEY)) || {};
+        
+        const todayStatsDiv = document.getElementById('today-stats');
+        todayStatsDiv.innerHTML = attemptsData[today] ? `
+            <p>Attempts: ${attemptsData[today].attempts.length}/6</p>
+            <p>Status: ${attemptsData[today].completed ? 
+                (stats[today]?.success ? 'Completed!' : 'Better luck tomorrow!') : 
+                'In Progress'}</p>
+        ` : 'No attempts yet today';
+
+        // Update calendar grid
+        const calendarDiv = document.getElementById('calendar-grid');
+        calendarDiv.innerHTML = '';
+            
+        const weeks = 7;
+        const days = 7;
+        const currentDate = new Date();
+            
+        for (let w = 0; w < weeks; w++) {
+            const weekDiv = document.createElement('div');
+            weekDiv.className = 'calendar-week';
+
+            for (let d = 0; d < days; d++) {
+                const date = new Date(currentDate);
+                date.setDate(date.getDate() - (((weeks - 1) - w) * 7 + ((days - 1) - d)));
+                const dateStr = date.toISOString().slice(0, 10);
+
+                const dayDiv = document.createElement('div');
+                dayDiv.className = 'calendar-day';
+
+                const dayStats = stats[dateStr];
+                const intensity = dayStats ? 
+                    (dayStats.success ? Math.max(1, 7 - dayStats.attempts) : 0) : 
+                    'empty';
+
+                dayDiv.classList.add(`intensity-${intensity}`);
+                dayDiv.title = `${dateStr}${dayStats ? 
+                    `: ${dayStats.success ? 
+                        `Solved in ${dayStats.attempts} attempts` : 
+                        'Not solved'}` : 
+                    ''}`;
+                
+                weekDiv.appendChild(dayDiv);
+            }
+            calendarDiv.appendChild(weekDiv);
+        }
+
+        // Show modal and overlay
+        statsModal.classList.remove('hidden');
+        statsModal.classList.add('visible');
+        overlay.classList.remove('hidden');
+
+        // Disable keyboard input while modal is open
+        const keyboardHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeStatsModal();
+            }
+            e.preventDefault();
+        };
+
+        document.addEventListener('keydown', keyboardHandler);
+
+        // Close modal function
+        function closeStatsModal() {
+            statsModal.classList.remove('visible');
+            statsModal.classList.add('hidden');
+            overlay.classList.add('hidden');
+            document.removeEventListener('keydown', keyboardHandler);
+        }
+
+        // Close button handler
+        document.getElementById('close-button-stats').onclick = closeStatsModal;
+
+        // Close on overlay click
+        overlay.onclick = closeStatsModal;
     });
+
+
+
+    function createCalendarHeatmap(stats) {
+        const weeks = 7;
+        const days = 7;
+        const today = new Date();
+        let heatmapHTML = '<div class="calendar-grid">';
+    
+        for (let w = 0; w < weeks; w++) {
+            heatmapHTML += '<div class="calendar-week">';
+            for (let d = 0; d < days; d++) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - (((weeks - 1) - w) * 7 + ((days - 1) - d)));
+                const dateStr = date.toISOString().slice(0, 10);
+                
+                const dayStats = stats[dateStr];
+                const intensity = dayStats ? 
+                    (dayStats.success ? Math.max(1, 7 - dayStats.attempts) : 0) : 
+                    'empty';
+                
+                heatmapHTML += `
+                    <div class="calendar-day intensity-${intensity}" 
+                         title="${dateStr}${dayStats ? 
+                             `: ${dayStats.success ? 
+                                 `Solved in ${dayStats.attempts} attempts` : 
+                                 'Not solved'}` : 
+                             ''}">
+                    </div>`;
+            }
+            heatmapHTML += '</div>';
+        }
+        heatmapHTML += '</div>';
+        
+        return heatmapHTML;
+    }
+    
+    // Add these styles to your CSS
+    const calendarStyles = `
+        .calendar-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            padding: 10px;
+            background: var(--background-color);
+        }
+
+        .calendar-week {
+            display: flex;
+            gap: 3px;
+        }
+
+        .calendar-day {
+            width: 15px;
+            height: 15px;
+            border-radius: 2px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .calendar-day:hover {
+            transform: scale(1.2);
+        }
+
+        .calendar-day.intensity-empty {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .calendar-day.intensity-0 {
+            background-color: #ff4444;
+        }
+
+        .calendar-day.intensity-1 {
+            background-color: #00ff00;
+        }
+
+        .calendar-day.intensity-2 {
+            background-color: #00dd00;
+        }
+
+        .calendar-day.intensity-3 {
+            background-color: #00bb00;
+        }
+
+        .calendar-day.intensity-4 {
+            background-color: #009900;
+        }
+
+        .calendar-day.intensity-5 {
+            background-color: #007700;
+        }
+
+        .calendar-day.intensity-6 {
+            background-color: #005500;
+        }
+
+        .stats-content {
+            max-width: 500px;
+            width: 90%;
+            padding: 20px;
+            color: var(--text-color);
+        }
+
+        .stats-summary {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .stats-summary h3 {
+            margin-bottom: 10px;
+        }
+
+        .calendar-container {
+            margin-top: 20px;
+        }
+
+        .calendar-container h3 {
+            margin-bottom: 15px;
+        }
+    `;
+    
+    // Add the styles to the document
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = calendarStyles;
+    document.head.appendChild(styleSheet);
 
     // Function to get or generate the daily challenge word
     const getDailyChallengeWord = async () => {
         const savedWordData = JSON.parse(localStorage.getItem('dailyChallenge'));
         const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
+
+        // Initialize or get today's attempts
+        let attemptsData = JSON.parse(localStorage.getItem(DAILY_ATTEMPTS_KEY)) || {};
+        if (!attemptsData[today]) {
+            attemptsData[today] = {
+                attempts: [],
+                completed: false
+            };
+            localStorage.setItem(DAILY_ATTEMPTS_KEY, JSON.stringify(attemptsData));
+        }
 
         // Check if the stored word is for today
         if (savedWordData && savedWordData.date === today) {
@@ -108,6 +517,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     } else {
         // Regular mode, choose a word as normal
         targetWord = await getRandomWord();
+    }
+
+    function isDailyChallengeAvailable() {
+        const today = new Date().toISOString().slice(0, 10);
+        const attemptsData = JSON.parse(localStorage.getItem(DAILY_ATTEMPTS_KEY)) || {};
+        const todayData = attemptsData[today];
+    
+        return !todayData || (!todayData.completed && todayData.attempts.length < 6);
     }
     
     // For alerts
@@ -312,6 +729,51 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
         }
 
+        // If in daily challenge mode, save the attempt
+        if (localStorage.getItem('dailyChallengeMode') === 'true') {
+            const today = new Date().toISOString().slice(0, 10);
+            const attemptsData = JSON.parse(localStorage.getItem(DAILY_ATTEMPTS_KEY)) || {};
+
+            if (!attemptsData[today]) {
+                attemptsData[today] = {
+                    attempts: [],
+                    completed: false
+                };
+            }
+
+            // Save the attempt
+            attemptsData[today].attempts.push({
+                guess,
+                result,
+                timestamp: new Date().toISOString()
+            });
+
+            // Check if word is guessed correctly or max attempts reached
+            if (guess === targetWord || attemptsData[today].attempts.length >= 6) {
+                attemptsData[today].completed = true;
+
+                // Save stats
+                const stats = JSON.parse(localStorage.getItem(DAILY_STATS_KEY)) || {};
+                stats[today] = {
+                    success: guess === targetWord,
+                    attempts: attemptsData[today].attempts.length,
+                    date: today
+                };
+                localStorage.setItem(DAILY_STATS_KEY, JSON.stringify(stats));
+                localStorage.setItem(DAILY_ATTEMPTS_KEY, JSON.stringify(attemptsData));
+
+                setTimeout(() => {
+                    showAlert(guess === targetWord ? 
+                        'Congratulations! Come back tomorrow for a new challenge!' :
+                        `The word was ${targetWord}. Try again tomorrow!`);
+                    localStorage.removeItem('dailyChallengeMode');
+                    setTimeout(() => location.reload(), 2000);
+                }, 500);
+            } else {
+                localStorage.setItem(DAILY_ATTEMPTS_KEY, JSON.stringify(attemptsData));
+            }
+        }
+
         if (currentRoom) {
             socket.emit('guessWord', {
                 roomId: currentRoom,
@@ -321,6 +783,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         return result;
     }
+
+    loadDailyChallengeState();
 
     // Function to update hard mode state based on the user's guess
     const updateHardModeState = async (guess, targetWord) => {
@@ -2510,12 +2974,87 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     document.getElementById('daily-challenge-option').addEventListener('click', async () => {
-        const dailyWord = await getDailyChallengeWord(); // Get the word for today
-        localStorage.setItem('targetWord', dailyWord);
+        if (currentRoom && gameInProgress) {
+            showAlert('You must leave the multiplayer room first to play daily challenge');
+            return;
+        }
+        
+        const today = new Date().toISOString().slice(0, 10);
+        const attemptsData = JSON.parse(localStorage.getItem(DAILY_ATTEMPTS_KEY)) || {};
+        const todayData = attemptsData[today];
+        
+        if (todayData?.completed) {
+            showAlert('You\'ve already completed today\'s challenge. Come back tomorrow!');
+            return;
+        }
     
-        localStorage.setItem('dailyChallengeMode', 'true'); // Flag to indicate daily challenge mode
-        location.reload(); // Refresh the page to apply the changes
+        const dailyWord = await getDailyChallengeWord();
+        localStorage.setItem('dailyChallengeMode', 'true');
+        location.reload();
     });
+
+    function getAttemptColors(date) {
+        const attemptsData = JSON.parse(localStorage.getItem(DAILY_ATTEMPTS_KEY)) || {};
+        const dayData = attemptsData[date];
+        
+        if (!dayData || !dayData.attempts.length) return [];
+        
+        return dayData.attempts.map(attempt => attempt.result);
+    }
+
+    function createAttemptGrid(date) {
+        const colors = getAttemptColors(date);
+        if (!colors.length) return '';
+    
+        let gridHTML = '<div class="attempt-grid">';
+        colors.forEach(attempt => {
+            gridHTML += '<div class="attempt-row">';
+            attempt.forEach(color => {
+                gridHTML += `<div class="attempt-box ${color}"></div>`;
+            });
+            gridHTML += '</div>';
+        });
+        gridHTML += '</div>';
+        
+        return gridHTML;
+    }
+    
+    // Add these styles to your CSS
+    const attemptGridStyles = `
+    .attempt-grid {
+        margin: 10px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .attempt-row {
+        display: flex;
+        gap: 4px;
+        justify-content: center;
+    }
+    
+    .attempt-box {
+        width: 20px;
+        height: 20px;
+        border-radius: 2px;
+    }
+    
+    .calendar-day:hover .attempt-grid {
+        display: flex;
+        position: absolute;
+        background: var(--background-color);
+        padding: 8px;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        z-index: 1020;
+    }
+    `;
+    
+    // Add styles to document
+    const gridStyleSheet = document.createElement('style');
+    gridStyleSheet.textContent = attemptGridStyles;
+    document.head.appendChild(gridStyleSheet);
     
     // Handle opting out by clicking on the title
     // Handle opting out by clicking on the title
