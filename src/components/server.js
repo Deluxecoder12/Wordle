@@ -25,6 +25,110 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
 });
 
+const RATE_LIMIT = {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: 'Too many requests, please try again later',
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false // Disable the `X-RateLimit-*` headers
+};
+
+const API_LIMITS = {
+    dailyLimit: 1000, // Maximum API calls per day
+    hourlyLimit: 100, // Maximum API calls per hour
+    minuteLimit: 20   // Maximum API calls per minute
+};
+
+// Create a simple in-memory store for tracking API usage
+const apiUsageStore = {
+    daily: new Map(),
+    hourly: new Map(),
+    minute: new Map(),
+    
+    // Reset all counters
+    resetCounters() {
+        this.daily = new Map();
+        this.hourly = new Map();
+        this.minute = new Map();
+    },
+    
+    // Get current timestamp for different intervals
+    getTimeKey(interval) {
+        const now = new Date();
+        switch(interval) {
+            case 'daily':
+                return now.toISOString().split('T')[0];
+            case 'hourly':
+                return `${now.toISOString().split(':')[0]}:00`;
+            case 'minute':
+                return `${now.toISOString().split(':')[0]}:${now.getMinutes()}`;
+            default:
+                return now.toISOString();
+        }
+    },
+    
+    // Check if limit is exceeded
+    isLimitExceeded(ip) {
+        const dailyKey = this.getTimeKey('daily');
+        const hourlyKey = this.getTimeKey('hourly');
+        const minuteKey = this.getTimeKey('minute');
+        
+        const dailyCount = (this.daily.get(`${ip}-${dailyKey}`) || 0);
+        const hourlyCount = (this.hourly.get(`${ip}-${hourlyKey}`) || 0);
+        const minuteCount = (this.minute.get(`${ip}-${minuteKey}`) || 0);
+        
+        return dailyCount >= API_LIMITS.dailyLimit ||
+               hourlyCount >= API_LIMITS.hourlyLimit ||
+               minuteCount >= API_LIMITS.minuteLimit;
+    },
+    
+    // Increment counters for an IP
+    incrementCounters(ip) {
+        const dailyKey = this.getTimeKey('daily');
+        const hourlyKey = this.getTimeKey('hourly');
+        const minuteKey = this.getTimeKey('minute');
+        
+        this.daily.set(`${ip}-${dailyKey}`, (this.daily.get(`${ip}-${dailyKey}`) || 0) + 1);
+        this.hourly.set(`${ip}-${hourlyKey}`, (this.hourly.get(`${ip}-${hourlyKey}`) || 0) + 1);
+        this.minute.set(`${ip}-${minuteKey}`, (this.minute.get(`${ip}-${minuteKey}`) || 0) + 1);
+    }
+};
+
+import rateLimit from 'express-rate-limit';
+import geoip from 'geoip-lite';
+const { lookup } = geoip;
+
+// Create rate limiter middleware
+const limiter = rateLimit(RATE_LIMIT);
+
+// Apply rate limiter to all routes
+app.use(limiter);
+
+// API Usage tracking middleware
+const trackApiUsage = (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    
+    // Check if IP is already blocked
+    if (apiUsageStore.isLimitExceeded(ip)) {
+        console.warn(`Rate limit exceeded for IP: ${ip}`);
+        return res.status(429).json({
+            error: 'Rate limit exceeded. Please try again later.',
+            retryAfter: '15 minutes'
+        });
+    }
+    
+    // Increment counters
+    apiUsageStore.incrementCounters(ip);
+    
+    // Log API usage
+    console.log(`API call from IP: ${ip}, Daily: ${apiUsageStore.daily.get(`${ip}-${apiUsageStore.getTimeKey('daily')}`)} calls`);
+    
+    next();
+};
+
+// Apply tracking middleware to API routes
+app.use('/api/*', trackApiUsage);
+
 app.get('/api/word', async (req, res) => {
     const maxRetries = 5; // Define the maximum number of retries
     let retryCount = 0;
@@ -92,7 +196,85 @@ app.get('/api/word', async (req, res) => {
     }
 });
 
+class ApiRateLimiter {
+    constructor() {
+        this.requests = new Map();
+        this.cleanupInterval = setInterval(() => this.cleanup(), 60 * 1000);
+    }
+
+    getKey(ip, window) {
+        const now = new Date();
+        switch(window) {
+            case 'minute':
+                return `${ip}-${now.toISOString().slice(0, 16)}`;
+            case 'hour':
+                return `${ip}-${now.toISOString().slice(0, 13)}`;
+            case 'day':
+                return `${ip}-${now.toISOString().slice(0, 10)}`;
+            default:
+                return `${ip}-${now.toISOString()}`;
+        }
+    }
+
+    isLimitExceeded(ip) {
+        const minuteKey = this.getKey(ip, 'minute');
+        const hourKey = this.getKey(ip, 'hour');
+        const dayKey = this.getKey(ip, 'day');
+
+        const minuteCount = this.requests.get(minuteKey) || 0;
+        const hourCount = this.requests.get(hourKey) || 0;
+        const dayCount = this.requests.get(dayKey) || 0;
+
+        return minuteCount >= 20 || hourCount >= 100 || dayCount >= 1000;
+    }
+
+    increment(ip) {
+        const keys = ['minute', 'hour', 'day'].map(window => this.getKey(ip, window));
+        keys.forEach(key => {
+            this.requests.set(key, (this.requests.get(key) || 0) + 1);
+        });
+    }
+
+    cleanup() {
+        const now = new Date();
+        for (const [key] of this.requests) {
+            const [ip, timestamp] = key.split('-');
+            if (new Date(timestamp) < new Date(now - 24 * 60 * 60 * 1000)) {
+                this.requests.delete(key);
+            }
+        }
+    }
+
+    stop() {
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+        }
+    }
+}
+
+// Create rate limiter instance
+const apiLimiter = new ApiRateLimiter();
+
+const rateLimitMiddleware = (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    
+    if (apiLimiter.isLimitExceeded(ip)) {
+        console.warn(`Rate limit exceeded for IP: ${ip}`);
+        return res.status(429).json({
+            error: 'Rate limit exceeded. Please try again later.',
+            retryAfter: '15 minutes'
+        });
+    }
+
+    apiLimiter.increment(ip);
+    next();
+};
+
+// Apply the limiter middleware to all API routes
+app.use('/api/*', rateLimitMiddleware);
+
 app.get('/api/validate-word', async (req, res) => {
+    const ip = req.ip || req.connection.remoteAddress;
     const { word } = req.query; // Get the word from the query string
 
     try {
@@ -103,6 +285,10 @@ app.get('/api/validate-word', async (req, res) => {
                 'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com'
             }
         });
+
+        if (!word || typeof word !== 'string' || word.length !== 5) {
+            return res.status(400).json({ error: 'Invalid word format' });
+        }
 
         if (response.status === 404) {
             // If the API returns a 404 status, the word was not found
@@ -125,6 +311,22 @@ app.get('/api/validate-word', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+
+setInterval(() => {
+    const now = new Date();
+    
+    // Clean up expired entries from all stores
+    ['daily', 'hourly', 'minute'].forEach(interval => {
+        const store = apiUsageStore[interval];
+        const currentKey = apiUsageStore.getTimeKey(interval);
+        
+        for (const [key] of store) {
+            if (!key.includes(currentKey)) {
+                store.delete(key);
+            }
+        }
+    });
+}, 60 * 1000); 
 
 // Constants for room management
 const INITIAL_ROOM_TIMEOUT = 5 * 60 * 1000;  // 5 minutes for initial joining
@@ -774,6 +976,18 @@ process.once('SIGUSR2', () => {
     shutdown(() => {
         process.kill(process.pid, 'SIGUSR2');
     });
+});
+
+process.on('SIGTERM', () => {
+    console.log('Cleaning up API limiter...');
+    apiLimiter.stop();
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('Cleaning up API limiter...');
+    apiLimiter.stop();
+    process.exit(0);
 });
 
 function shutdown(callback) {

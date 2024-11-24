@@ -1558,36 +1558,279 @@ input[type="checkbox"]:checked::before {
         max-width: 400px;
     }
 }
-/* Adjust styles for screens smaller than 768px
-@media (max-width: 768px) {
-    .guess-cell {
-        padding: 1.2em;
-        font-size: 2em;
+
+@media screen and (max-width: 480px) {
+    /* Header adjustments */
+    header ul {
+        display: flex;
+        justify-content: space-between;
+        padding: 0 10px;
     }
 
     .Heading {
-        font-size: 2em;
+        font-size: 1.2em;
     }
 
-    .key {
-        font-size: 1.1em;
-        padding: 10px;
+    img {
+        max-width: 1.8em;
     }
-}
-*/
-/* Adjust styles for screens smaller than 480px 
-@media (max-width: 480px) {
+
+    /* Game grid adjustments */
     .guess-box {
-        padding: 0.25rem;
-        font-size: 1.5em;
+        max-width: 1.8ch;
+        font-size: 1.8em;
     }
 
-    .Heading {
-        font-size: 1.5em;
+    .word-guess {
+        padding: 3px;
+        gap: 3px;
+    }
+
+    /* Virtual keyboard adjustments */
+    .virtual-keyboard {
+        margin-top: 5px;
+        padding: 0 5px;
     }
 
     .key {
         font-size: 1em;
         padding: 6px;
+        margin: 1px;
     }
-} */
+
+    #enter {
+        width: 50px;
+        font-size: 0.9em;
+    }
+
+    #backspace {
+        padding-right: 1.2em;
+        width: 35px;
+    }
+
+    /* Modal adjustments */
+    #instruction-card,
+    #settings-card,
+    #multiplayer-modal,
+    .modal-card,
+    .final-leaderboard-modal {
+        width: 90%;
+        max-height: 85vh;
+        padding: 15px;
+        top: 45%;
+    }
+
+    .close-button {
+        top: 10px;
+        right: 10px;
+    }
+
+    /* Stats modal adjustments */
+    .calendar-grid {
+        transform: scale(0.9);
+        transform-origin: left top;
+    }
+
+    .stats-summary {
+        font-size: 0.9em;
+    }
+
+    /* Multiplayer adjustments */
+    .game-layout {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 10px;
+    }
+
+    .player-profile {
+        position: static;
+        margin-bottom: 10px;
+    }
+
+    .game-section {
+        width: 100%;
+    }
+
+    .leaderboard {
+        position: static;
+        width: 100%;
+        margin: 10px 0;
+    }
+
+    .leaderboard-item {
+        font-size: 0.9em;
+        padding: 6px 8px;
+    }
+
+    /* Alert adjustments */
+    .alert-container {
+        width: 90%;
+        font-size: 0.9em;
+        padding: 8px 12px;
+    }
+
+    /* Game controls adjustments */
+    .game-controls {
+        gap: 5px;
+    }
+
+    .game-btn {
+        padding: 10px 15px;
+        font-size: 0.9em;
+    }
+}
+
+/* Small mobile devices */
+@media screen and (max-width: 320px) {
+    .Heading {
+        font-size: 1em;
+    }
+
+    img {
+        max-width: 1.5em;
+    }
+
+    .guess-box {
+        max-width: 1.6ch;
+        font-size: 1.6em;
+    }
+
+    .key {
+        font-size: 0.9em;
+        padding: 5px;
+    }
+}
+
+/* Landscape mode adjustments */
+@media screen and (max-height: 480px) and (orientation: landscape) {
+    .game-layout {
+        grid-template-columns: 1fr;
+        gap: 5px;
+        padding: 5px;
+    }
+
+    .word-guess {
+        transform: scale(0.9);
+        transform-origin: center top;
+    }
+
+    .virtual-keyboard {
+        transform: scale(0.9);
+        transform-origin: center top;
+    }
+
+    /* Adjust modals for landscape */
+    #instruction-card,
+    #settings-card,
+    #multiplayer-modal,
+    .modal-card,
+    .final-leaderboard-modal {
+        max-height: 90vh;
+        top: 50%;
+    }
+}
+
+/* Tablet devices */
+@media screen and (min-width: 769px) and (max-width: 1024px) {
+    .game-layout {
+        grid-template-columns: 180px 1fr 220px;
+        gap: 15px;
+        padding: 15px;
+    }
+
+    .guess-box {
+        font-size: 2.2em;
+    }
+
+    .key {
+        font-size: 1.3em;
+        padding: 8px;
+    }
+}
+
+/* Modal animations for all screen sizes */
+@keyframes modalSlideIn {
+    from {
+        transform: translate(-50%, -40%);
+        opacity: 0;
+    }
+    to {
+        transform: translate(-50%, -50%);
+        opacity: 1;
+    }
+}
+
+.modal-card.visible,
+#instruction-card.visible,
+#settings-card.visible,
+#multiplayer-modal.visible,
+.final-leaderboard-modal {
+    animation: modalSlideIn 0.3s ease-out forwards;
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+    .modal-card.visible,
+    #instruction-card.visible,
+    #settings-card.visible,
+    #multiplayer-modal.visible,
+    .final-leaderboard-modal,
+    .flip,
+    .enlarge {
+        animation: none;
+    }
+}
+
+/* Touch device optimizations */
+@media (hover: none) {
+    .key:hover {
+        background-color: #444;
+    }
+
+    .key:active {
+        background-color: #666;
+    }
+
+    .calendar-day:hover {
+        transform: none;
+    }
+
+    .game-btn:hover {
+        transform: none;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .green {
+        background-color: #00c800;
+    }
+
+    .yellow {
+        background-color: #ffd700;
+    }
+
+    .red {
+        background-color: #ff0000;
+    }
+}
+
+/* Dark mode refinements */
+@media (prefers-color-scheme: dark) {
+    [data-theme='dark'] .modal-card,
+    [data-theme='dark'] #instruction-card,
+    [data-theme='dark'] #settings-card,
+    [data-theme='dark'] #multiplayer-modal {
+        background-color: #1a1a1a;
+        border-color: #333;
+    }
+}
+
+/* PWA support for mobile */
+@media all and (display-mode: standalone) {
+    .game-layout {
+        height: 100vh;
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-top: env(safe-area-inset-top);
+    }
+}
