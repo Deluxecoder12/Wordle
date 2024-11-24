@@ -118,9 +118,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     function updateStatsIconState() {
         const statsIcon = document.getElementById('stats-icon');
         if (!statsIcon) return;
-        console.log('Updating stats icon state');
-        console.log('Current room:', currentRoom);
-        console.log('Game in progress:', gameInProgress);
         
         if (currentRoom && gameInProgress) {
             statsIcon.style.opacity = '0.5';
@@ -255,10 +252,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.head.appendChild(modalStyleSheet);
 
     document.getElementById('stats-icon').addEventListener('click', (e) => {
-        console.log('Stats icon clicked');
-        console.log('statsIconDisabled:', statsIconDisabled);
-        console.log('currentRoom:', currentRoom);
-        console.log('gameInProgress:', gameInProgress);
         if (statsIconDisabled) {
             e.preventDefault();
             e.stopPropagation();
@@ -504,7 +497,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 date: today
             }));
 
-            console.log(`New daily challenge word: ${newWord}`);
             return newWord;
         }
     };
@@ -951,7 +943,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 if (hardModeEnabled) {
                     const stateUpdated = await updateHardModeState(guess, targetWord);
                     if (!stateUpdated) {
-                        console.log('State update failed.');
                         return; // Exit if the state was not updated
                     }
                 }
@@ -1079,7 +1070,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         const activeInput = lastFocusedInput;
     
         if (!activeInput || !activeInput.classList.contains('guess-box')) {
-            console.log('No active input box found or the active element is not a guess-box.');
             return; // If no active input box, return
         }
     
@@ -1230,7 +1220,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     overlay.addEventListener('click', closeAllModals);
 
     function closeAllModals() {
-        console.log('Closing all modals, currentRoom:', currentRoom);
         // Close instruction card
         if (instructionCard.classList.contains('visible')) {
             toggleCardVisibility(instructionCard);
@@ -1422,7 +1411,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     const handleThemeChange = (event) => {
         const theme = event.target.checked ? 'dark' : 'light';
-        console.log(`Switching to ${theme} mode`);
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('data-theme', theme);
         updateIcons(); // Ensure icons update
@@ -1444,10 +1432,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (!gameStarted) {
             localStorage.setItem('hard-mode-enabled', hardModeEnabled);
             toggleHardMode(hardModeEnabled);
-            console.log("Hard mode toggled:", hardModeEnabled);
         } else {
             // Prevent hard mode change if the game has already started
-            console.log("Cannot toggle hard mode after the game has started");
             event.target.checked = !hardModeEnabled;
         }
     };
@@ -1490,13 +1476,11 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Create room functionality
     createRoomBtn.addEventListener('click', async () => {
-        console.log('Create room clicked');
         try {
             const response = await fetch('/api/create-room', {
                 method: 'POST'
             });
             const data = await response.json();
-            console.log('Room created:', data);
             
             if (data.roomCode) {
                 currentRoom = data.roomCode;
@@ -1536,7 +1520,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 const roomCodeDisplay = document.getElementById('room-code-display');
                 if (roomCodeDisplay && currentRoom) {
                     roomCodeDisplay.textContent = `Room Code: ${currentRoom}`;
-                    console.log('Updated room code display:', currentRoom);
                 }
             } else {
                 showAlert('Invalid room code');
@@ -1564,7 +1547,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
     socket.on('disconnect', () => {
-        console.log('Disconnected from server');
         showAlert('Lost connection to server. Please refresh the page.');
     });
 
@@ -1588,8 +1570,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     socket.on('gameStarted', ({ word, timeLimit, gameAlreadyStarted}) => {
-        
-        console.log('Game started event received:', { gameAlreadyStarted });
         gameInProgress = true;
         targetWord = word.toUpperCase();
         attempts = 0;
@@ -1858,7 +1838,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     socket.on('newWord', ({ word }) => {
-        console.log('Received new word:', word); // Debug log
         targetWord = word.toUpperCase();
         resetGrid();
         attempts = 0;
@@ -1980,7 +1959,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                             newReadyButton.textContent = 'Ready ✓';
                         });
                         gameControls.insertBefore(newReadyButton, gameControls.querySelector('.danger-btn')); // Insert before Leave Room button
-                        console.log('Ready button created for player');
                     }
                 }
             }
@@ -1995,7 +1973,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Show name input modal
     function showNameInputModal(roomCode) {
-        console.log('showNameInputModal called with roomCode:', roomCode);
     
         const confirmBtn = document.getElementById('confirm-name-btn');
         const randomBtn = document.getElementById('random-name-btn');
@@ -2095,7 +2072,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         // Function to handle random name generation
         function handleRandomName() {
-            console.log('Random clicked');
             // Store current input value if it exists
             if (nameInput.value.trim()) {
                 originalValue = nameInput.value;
@@ -2183,7 +2159,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Function to update leaderboard
     function updateLeaderboard(players, isGameStarted = false) {
-        console.log('Updating leaderboard with players:', players); // Debug log
         // Update the final leaderboard content
         const leaderboardContent = document.getElementById('leaderboard-content');
         const playerProfile = document.querySelector('.profile-content');
@@ -2447,7 +2422,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                             socket.emit('startGame', currentRoom);
                         });
                         gameControls.insertBefore(startButton, gameControls.firstChild);
-                        console.log('Start button set up for admin');
                     } else if (!roomExpired) {
                         // Create Ready button for players
                         const readyButton = document.createElement('button');
@@ -2460,7 +2434,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                             readyButton.textContent = 'Ready ✓';
                         });
                         gameControls.insertBefore(readyButton, gameControls.querySelector('.danger-btn'));
-                        console.log('Ready button set up for player');
                     }
                 }
             }
@@ -2479,7 +2452,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Add client-side handler for game end
     socket.on('gameEnded', ({ players, remainingTime, isCreator }) => {
-        console.log('Game ended received:', { players, remainingTime, isCreator });
         
         gameInProgress = false;
         if (gameTimer) {
@@ -2526,7 +2498,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Update player list
     function updatePlayerList(players) {
-        console.log('Updating player list:', players);
         const playerListContainer = document.querySelector('.player-list');
         if (!playerListContainer) return;
     
@@ -2628,7 +2599,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     function startGameTimer(timeLimit) {
-        console.log('Starting game timer with limit:', timeLimit); // Debug log
     
         if (gameTimer) {
             clearInterval(gameTimer);
@@ -2688,12 +2658,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
     
     socket.on('reconnect_failed', () => {
-        console.log('Failed to reconnect to server');
         showAlert('Unable to connect to server. Please refresh the page.');
     });
 
     socket.on('serverShutdown', ({ message }) => {
-        console.log('Server shutdown:', message);
         showAlert('Server is shutting down. Please refresh the page later.');
         resetGame();
     });
@@ -2716,7 +2684,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     const cancelLeaveBtn = document.getElementById('cancel-leave');
 
     function showLeaveConfirmation() {
-        console.log('Showing leave confirmation'); // Debug log
         if (!leaveModal) {
             console.error('Leave modal not found');
             return;
@@ -2760,7 +2727,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     function hideLeaveConfirmation() {
-        console.log('Hiding leave confirmation'); // Debug log
         if (leaveModal) {
             leaveModal.classList.add('hidden');
         }
@@ -2882,7 +2848,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     if (leaveRoomBtn) {
         leaveRoomBtn.addEventListener('click', (e) => {
-            console.log('Leave room button clicked'); // Debug log
             e.preventDefault();
             showLeaveConfirmation();
         });
@@ -2925,7 +2890,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
     
     closeButtonMultiplayer.addEventListener('click', () => {
-        console.log('Close button clicked, currentRoom:', currentRoom);
         nameError.classList.add('hidden');
         if (currentRoom) {
             showLeaveConfirmation();

@@ -120,9 +120,6 @@ const trackApiUsage = (req, res, next) => {
     // Increment counters
     apiUsageStore.incrementCounters(ip);
     
-    // Log API usage
-    console.log(`API call from IP: ${ip}, Daily: ${apiUsageStore.daily.get(`${ip}-${apiUsageStore.getTimeKey('daily')}`)} calls`);
-    
     next();
 };
 
@@ -173,12 +170,7 @@ app.get('/api/word', async (req, res) => {
 
         while (retryCount < maxRetries && !validWord) {
             retryCount++;
-            console.log(`Attempt ${retryCount} to fetch a valid word...`);
             validWord = await fetchAndValidateWord();
-
-            if (!validWord && retryCount < maxRetries) {
-                console.log('Invalid word, retrying...');
-            }
         }
 
         return validWord;
@@ -188,7 +180,6 @@ app.get('/api/word', async (req, res) => {
     const word = await getValidWord();
 
     if (word) {
-        console.log('Valid word found:', word);
         res.json({ word });
     } else {
         console.error('Failed to fetch a valid word after multiple retries');
@@ -346,7 +337,6 @@ function checkRoomExpiry(roomId) {
     const timeoutToUse = hasPlayers ? ACTIVE_ROOM_TIMEOUT : INITIAL_ROOM_TIMEOUT;
 
     if (roomAge >= timeoutToUse) {
-        console.log(`Room ${roomId} expired after ${timeoutToUse/1000/60} minutes`);
         // Notify all players in the room if there are any
         if (hasPlayers) {
             io.to(roomId).emit('roomExpired');
@@ -372,7 +362,6 @@ function cleanupRoom(roomId) {
         
         // Remove room
         delete rooms[roomId];
-        console.log(`Room ${roomId} cleaned up at ${new Date().toLocaleTimeString()}`);
     }
 }
 
@@ -388,16 +377,12 @@ setInterval(() => {
         if (isEmpty) {
             if (room.isActive) {
                 // Room was active but now empty
-                console.log(`Cleaning up abandoned room ${roomId}`);
                 cleanupRoom(roomId);
             } else if (roomAge >= INITIAL_ROOM_TIMEOUT) {
                 // Inactive room that exceeded initial timeout
-                console.log(`Cleaning up unused room ${roomId} after ${Math.floor(roomAge/1000/60)} minutes`);
                 cleanupRoom(roomId);
             }
         } else if (roomAge >= ACTIVE_ROOM_TIMEOUT) {
-            // Active room that exceeded maximum time limit
-            console.log(`Cleaning up expired active room ${roomId} after ${Math.floor(roomAge/1000/60)} minutes`);
             cleanupRoom(roomId);
         }
     }
@@ -413,11 +398,9 @@ io.on('error', (error) => {
 
 // Socket.IO connection event
 io.on('connection', (socket) => {
-    console.log(`Player connected: ${socket.id}`);
 
     // Player joins a room
     socket.on('joinRoom', async ({ roomId, username }) => {
-        console.log(`${username} attempting to join room ${roomId}`);
         
         const room = rooms[roomId];
         if (!room) {
@@ -448,7 +431,6 @@ io.on('connection', (socket) => {
                 room.isActive = true;
                 clearTimeout(room.timeout);
                 room.timeout = setTimeout(() => checkRoomExpiry(roomId), ACTIVE_ROOM_TIMEOUT);
-                console.log(`Room ${roomId} activated, new expiry set to ${ACTIVE_ROOM_TIMEOUT/1000/60} minutes`);
             }
 
             // Add player to room
@@ -481,7 +463,6 @@ io.on('connection', (socket) => {
 
             // If game is in progress, immediately send gameStarted to new player
             if (room.gameInProgress) {
-                console.log(`Sending game state to new player ${username}`);
                 socket.emit('gameStarted', {
                     word: room.currentWord,
                     timeLimit: 5 * 60 * 1000, // 5 minutes
@@ -492,7 +473,6 @@ io.on('connection', (socket) => {
             // Notify others
             socket.broadcast.to(roomId).emit('playerJoined', { username });
             
-            console.log(`${username} successfully joined room ${roomId}`);
         } catch (error) {
             console.error('Error in room join:', error);
             // Remove player if they were added
@@ -554,11 +534,6 @@ io.on('connection', (socket) => {
         const allPlayersReady = nonAdminPlayers.length > 0 && 
             nonAdminPlayers.every(player => player.isReady);
      
-        console.log('Ready status check:', {
-            nonAdminPlayers: nonAdminPlayers.length,
-            allReady: allPlayersReady
-        });
-     
         // Broadcast updated game state
         io.to(roomId).emit('gameState', { 
             players: room.players,
@@ -580,10 +555,8 @@ io.on('connection', (socket) => {
     });
      
     socket.on('startGame', async (roomId) => {
-        console.log(`Attempting to start game in room ${roomId}`);
         const room = rooms[roomId];
         if (!room) {
-            console.log('Room not found');
             socket.emit('error', { message: 'Room not found' });
             return;
         }
@@ -640,8 +613,6 @@ io.on('connection', (socket) => {
                 }
             }, 1000);
     
-            console.log(`Game started in room ${roomId} with word: ${room.currentWord}`);
-    
             io.to(roomId).emit('gameStarted', {
                 word: room.wordSequence[0],
                 timeLimit: 5 * 60 * 1000,
@@ -683,7 +654,6 @@ io.on('connection', (socket) => {
             // If room is empty, mark as inactive
             if (Object.keys(rooms[roomId].players).length === 0) {
                 rooms[roomId].isActive = false;
-                console.log(`Room ${roomId} deactivated due to all players leaving`);
             }
 
             // Leave the Socket.IO room
@@ -704,30 +674,24 @@ io.on('connection', (socket) => {
             if (Object.keys(rooms[roomId].players).length === 0) {
                 cleanupRoom(roomId);
             }
-
-            console.log(`${username} left room ${roomId}`);
         }
     });
 
     // Handle player's word guess
     socket.on('guessWord', async ({ roomId, guessedWord }) => {
-        console.log('Received guess:', { roomId, guessedWord });
 
         // Validate input
         if (!roomId || !guessedWord) {
-            console.log('Invalid input:', { roomId, guessedWord });
             return;
         }
 
         const room = rooms[roomId];
         if (!room || !room.gameInProgress) {
-            console.log('Room not found or game not in progress');
             return;
         }
 
         const player = room.players[socket.id];
         if (!player) {
-            console.log('Player not found');
             return;
         }
 
@@ -765,16 +729,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('wordGuessed', async ({ roomId, word, attempts }) => {
-        console.log('Word guessed correctly:', { roomId, word, attempts });
 
         if (!roomId || !word) {
-            console.log('Invalid wordGuessed input');
             return;
         }
 
         const room = rooms[roomId];
         if (!room || !room.players[socket.id]) {
-            console.log('Room or player not found');
             return;
         }
 
@@ -856,7 +817,6 @@ io.on('connection', (socket) => {
 
     // Handle player disconnect
     socket.on('disconnect', () => {
-        console.log(`Player disconnected: ${socket.id}`);
         for (const roomId in rooms) {
             const room = rooms[roomId];
             if (room.players[socket.id]) {
@@ -954,7 +914,6 @@ app.post('/api/create-room', (req, res) => {
         isActive: false
     };
 
-    console.log(`Room ${roomCode} created, will expire in ${INITIAL_ROOM_TIMEOUT/1000/60} minutes if unused.`);
     res.json({ roomCode });
 });
 
@@ -979,19 +938,16 @@ process.once('SIGUSR2', () => {
 });
 
 process.on('SIGTERM', () => {
-    console.log('Cleaning up API limiter...');
     apiLimiter.stop();
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    console.log('Cleaning up API limiter...');
     apiLimiter.stop();
     process.exit(0);
 });
 
 function shutdown(callback) {
-    console.log('Received shutdown signal');
 
     // Notify all connected clients
     io.emit('serverShutdown', { message: 'Server is shutting down' });
@@ -1003,7 +959,6 @@ function shutdown(callback) {
 
     // Add a timeout to force shutdown if cleanup takes too long
     const shutdownTimeout = setTimeout(() => {
-        console.log('Forcing shutdown after timeout');
         process.exit(1);
     }, 5000); // 5 seconds timeout
 
@@ -1013,7 +968,6 @@ function shutdown(callback) {
         if (err) {
             console.error('Error closing socket connections', err);
         } else {
-            console.log('All socket connections closed');
             if (callback) callback(); // Call the provided callback if any
         }
     });
